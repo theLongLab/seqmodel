@@ -30,7 +30,7 @@ def index_to_bioseq(tensor):
     assert len(tensor.shape) == 1
     return Seq(''.join([INDEX_TO_BASE[i] for i in tensor.cpu().detach().numpy()]))
 
-def one_hot(index_sequence, indexes=range(4), dim=1):
+def one_hot(index_sequence, indexes=range(N_BASE), dim=1):
     with torch.no_grad():
         return torch.stack([(index_sequence == i).float() for i in indexes], dim=dim)
 

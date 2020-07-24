@@ -13,5 +13,6 @@ class Test_IO(unittest.TestCase):
     def test_map_contigs(self):
         df = map_contigs(self.test_filename, buffer=65536)
 
+
 if __name__ == '__main__':
     unittest.main()

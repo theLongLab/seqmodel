@@ -56,5 +56,6 @@ class Test_Mapseq(unittest.TestCase):
         ungapped = MapSequence.from_file(self.test_filename, subseq_len, remove_gaps=True)
         self.assertLess(len(ungapped), len(fasta_data))
 
+
 if __name__ == '__main__':
     unittest.main()
