@@ -18,3 +18,4 @@ model
     - same as current
 seq
     - plug and play datasets, loaders
+    - utilities
