@@ -36,16 +36,6 @@ def one_hot(index_sequence, indexes=range(N_BASE), dim=1):
     with torch.no_grad():
         return torch.stack([(index_sequence == i).float() for i in indexes], dim=dim)
 
-def TEST_one_hot_1(index_sequence):
-    with torch.no_grad():
-        output = torch.zeros(index_sequence.size(0), N_BASE, index_sequence.size(1))
-        for i in range(N_BASE):
-            output[:, i,:] = output[:, i,:].masked_fill(index_sequence == i, float(1.0))
-    return output
-
-def TEST_one_hot_2(x):
-    return F.one_hot(x, num_classes=N_BASE).permute(0, 2, 1).type(torch.float32)
-
 def one_hot_to_index(x):
     return torch.argmax(x, dim=1)
 

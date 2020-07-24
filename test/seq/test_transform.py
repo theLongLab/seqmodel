@@ -25,14 +25,6 @@ class Test_Transforms(unittest.TestCase):
         self.bioseq = random_bioseq(self.batches * self.seq_len)
         self.indexes = bioseq_to_index(self.bioseq).reshape(self.batches, self.seq_len)
 
-    def test_LambdaModule(self):
-        fn = LambdaModule(one_hot, one_hot_to_index)
-        npt.assert_array_equal(fn(self.test_indexes), self.test_indexes)
-        fn = LambdaModule(index_to_bioseq, bioseq_to_index)
-        npt.assert_array_equal(fn(self.indexes.flatten()), self.indexes.flatten())
-        fn = LambdaModule(one_hot, reverse, complement, reverse_complement)
-        npt.assert_array_equal(fn(self.indexes), one_hot(self.indexes))
-
     def test_bioseq_to_index(self):
         self.assertEqual(index_to_bioseq(self.test_indexes), self.test_seq)
         npt.assert_array_equal(bioseq_to_index(self.test_seq), self.test_indexes)
@@ -41,12 +33,11 @@ class Test_Transforms(unittest.TestCase):
                                 self.indexes.flatten())
 
     def test_one_hot(self):
-        for one_hot_fn in [one_hot, TEST_one_hot_1, TEST_one_hot_2]:
-            tensor = one_hot_fn(self.test_indexes.reshape(1, len(self.test_indexes)))
-            npt.assert_array_equal(tensor, self.test_1h_tensor)
-            tensor = one_hot_fn(self.indexes)
-            self.assertEqual(tensor.shape, (self.batches, N_BASE, self.seq_len))
-            npt.assert_array_equal(one_hot_to_index(tensor), self.indexes)
+        tensor = one_hot(self.test_indexes.reshape(1, len(self.test_indexes)))
+        npt.assert_array_equal(tensor, self.test_1h_tensor)
+        tensor = one_hot(self.indexes)
+        self.assertEqual(tensor.shape, (self.batches, N_BASE, self.seq_len))
+        npt.assert_array_equal(one_hot_to_index(tensor), self.indexes)
 
     def test_softmax_to_index(self):
         tensor = self.test_1h_tensor.float()
@@ -69,6 +60,15 @@ class Test_Transforms(unittest.TestCase):
             npt.assert_array_equal(reverse(complement(reverse(tensor))), complement(tensor))
             npt.assert_array_equal(reverse(complement(tensor)), reverse_complement(tensor))
             npt.assert_array_equal(reverse_complement(complement(reverse((tensor)))), tensor)
+
+    def test_LambdaModule(self):
+        fn = LambdaModule(one_hot, one_hot_to_index)
+        npt.assert_array_equal(fn(self.test_indexes), self.test_indexes)
+        fn = LambdaModule(index_to_bioseq, bioseq_to_index)
+        npt.assert_array_equal(fn(self.indexes.flatten()), self.indexes.flatten())
+        fn = LambdaModule(one_hot, reverse, complement, reverse_complement)
+        npt.assert_array_equal(fn(self.indexes), one_hot(self.indexes))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -72,6 +72,12 @@ class RandomRepeatSequence(torch.utils.data.Dataset):
         return bioseq_to_index(self.seq[index * self.seq_len: (index + 1) * self.seq_len])
 
 
+# quickly create a batch for testing purposes
+def create_test_batch(batch_size, seq_len):
+    dataset = RandomRepeatSequence(seq_len, batch_size, 2, repeat_len=2)
+    return torch.stack([dataset[i] for i in range(batch_size)], dim=0)
+
+
 # class LabelledSequence(torch.utils.data.Dataset):
 
 #     def __init__(self, filename, input_seq_len):
