@@ -38,8 +38,8 @@ class CosineSimilarityLoss(nn.CosineSimilarity):
         return self.reducer(1 - super().forward(x, y))
 
 
-# wrapper
-class LossWrapper(nn.Module):
+# wrapper passing inputs, targets
+class LambdaLoss(nn.Module):
 
     def __init__(self, loss_fn):
         super().__init__()

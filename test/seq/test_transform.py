@@ -25,6 +25,14 @@ class Test_Transforms(unittest.TestCase):
         self.bioseq = random_bioseq(self.batches * self.seq_len)
         self.indexes = bioseq_to_index(self.bioseq).reshape(self.batches, self.seq_len)
 
+    def test_LambdaModule(self):
+        fn = LambdaModule(one_hot, one_hot_to_index)
+        npt.assert_array_equal(fn(self.test_indexes), self.test_indexes)
+        fn = LambdaModule(index_to_bioseq, bioseq_to_index)
+        npt.assert_array_equal(fn(self.indexes.flatten()), self.indexes.flatten())
+        fn = LambdaModule(one_hot, reverse, complement, reverse_complement)
+        npt.assert_array_equal(fn(self.indexes), one_hot(self.indexes))
+
     def test_bioseq_to_index(self):
         self.assertEqual(index_to_bioseq(self.test_indexes), self.test_seq)
         npt.assert_array_equal(bioseq_to_index(self.test_seq), self.test_indexes)

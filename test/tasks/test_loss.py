@@ -29,23 +29,23 @@ class Test_Loss(unittest.TestCase):
 
     def test_WeightedLoss(self):
         loss_fn = WeightedLoss({
-            LossWrapper(nn.MSELoss()): 1.,
-            LossWrapper(nn.BCELoss()): 1.,
+            LambdaLoss(nn.MSELoss()): 1.,
+            LambdaLoss(nn.BCELoss()): 1.,
         })
 
         self.assertEqual(loss_fn(self.x, self.target, self.latent),
             F.mse_loss(self.x, self.target) + F.binary_cross_entropy(self.x, self.target))
         loss_fn = WeightedLoss({
-            LossWrapper(nn.MSELoss()): 0.5,
-            LossWrapper(nn.BCELoss()): 2.,
+            LambdaLoss(nn.MSELoss()): 0.5,
+            LambdaLoss(nn.BCELoss()): 2.,
         })
         loss = 0.5 * F.mse_loss(self.x, self.target) + \
                 2. * F.binary_cross_entropy(self.x, self.target)
         self.assertEqual(loss_fn(self.x, self.target, self.latent).item(), loss.item())
 
-    def test_LossWrapper(self):
+    def test_LambdaLoss(self):
         for fn in [nn.MSELoss(), nn.BCELoss()]:
-            loss_fn = LossWrapper(fn)
+            loss_fn = LambdaLoss(fn)
             self.assertEqual(loss_fn(self.x, self.target, self.latent).item(),
                         fn(self.x, self.target).item())
 

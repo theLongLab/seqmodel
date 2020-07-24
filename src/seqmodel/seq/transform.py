@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from Bio.Seq import Seq
 
@@ -22,6 +23,7 @@ def bioseq_to_index(bioseq):
     int_array = np.empty(len(bioseq), dtype='int8')
     for base, index in BASE_TO_INDEX.items():
         match = (str_array == base)
+        # print(base, index, match, str_array)
         int_array[match] = index
     return torch.LongTensor(int_array)
 
@@ -61,3 +63,15 @@ def reverse(x):
 
 def reverse_complement(x):
     return torch.flip(x, [1, 2])
+
+
+class LambdaModule(nn.Module):
+
+    def __init__(self, *fn_list):
+        super().__init__()
+        self.fn_list = fn_list
+
+    def forward(self, x):
+        for fn in self.fn_list:
+            x = fn(x)
+        return x
