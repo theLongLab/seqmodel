@@ -8,8 +8,10 @@ from seqmodel.seq.transform import N_BASE, LambdaModule, one_hot
 
 class GenericTask(nn.Module):
 
-    """Task applying loss function to inputs.
+    """
+    Task applying loss function to inputs.
 
+    Args:
         encoder: first model applied to input, outputs latent
         decoder: second model applied to input, outputs predicted
         loss_fn: applied to (predicted, input, latent)
@@ -31,7 +33,6 @@ class GenericTask(nn.Module):
 
     def loss(self, x):
         predicted, latent = self(x)
-        print(predicted.shape, x.shape)
         return self.loss_fn(predicted, x, latent)
 
     def evaluate(self):
@@ -46,6 +47,7 @@ class PredictMaskedTask(GenericTask):
     Takes in batched sequences of indexes, masks sequence, and calculates loss
     relative to original sequence.
 
+    Args:
         no_loss_prop: (implicit) proportion of data that isn't used to calculate loss
         mask_prop: proportion of data masked in input
         random_prop: proportion of data which is randomly shuffled in input
@@ -57,7 +59,7 @@ class PredictMaskedTask(GenericTask):
                 keep_prop=0., mask_prop=0., random_prop=0.,
                 mask_value=0, n_classes=N_BASE, allow_no_loss=False):
         self.set_mask_props(keep_prop, mask_prop, random_prop)
-        preprocess = LambdaModule(self.generate_mask, self.randomize_input,
+        preprocess = LambdaModule(self.generate_mask_and_permute, self.randomize_input,
                                     one_hot, self.mask_input)
         super().__init__(encoder, decoder, loss_fn, preprocess=preprocess)
 
@@ -78,7 +80,7 @@ class PredictMaskedTask(GenericTask):
         self._keep_cutoff = self._random_cutoff + random_prop
 
     # generate from index vector size
-    def generate_mask(self, x):
+    def generate_mask_and_permute(self, x):
         prob = torch.rand_like(x, dtype=torch.float32)
         self.mask = (prob > self._mask_cutoff).type(torch.int8)     \
                     + (prob > self._random_cutoff).type(torch.int8) \

@@ -1,5 +1,6 @@
 import timeit
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 
@@ -8,12 +9,13 @@ if __name__ == '__main__':
 
     def print_memory_use():
         if do_print_memory_use:
-            print_memory_use()
+            print(torch.cuda.memory_allocated(), torch.cuda.memory_reserved())
 
     dev = torch.device('cuda')
-    n_tries = 1000
+    n_tries = 100
     if do_print_memory_use:
         n_tries = 1
+
 
     for seq_len in [100, 1000, 10000]:
         def gen1():
@@ -89,6 +91,7 @@ if __name__ == '__main__':
         for fn in [mask1, fill1, fill2, fill_sum]:
             print(timeit.timeit(lambda: fn(), number=n_tries), seq_len, fn)
 
+
         for batches in [1, 10, 100]:
 
             def one_hot(index_sequence, indexes=range(4), dim=1):
@@ -118,3 +121,18 @@ if __name__ == '__main__':
             for fn in [one_hot, one_hot1, one_hot_ref]:
                         print(timeit.timeit(lambda: one_hot_test(fn, batches, seq_len), number=n_tries),
                                 batches, seq_len, fn)
+
+            def functional_test(fn, batches, seq_len):
+                x = torch.randn(batches, 4, seq_len)
+                fn(x)
+                print_memory_use()
+                return x
+
+
+            for pool_size in [2, 4, 8, 16]:
+
+                for fn in [nn.MaxPool1d(pool_size), lambda x: F.max_pool1d(x, pool_size),
+                            nn.AvgPool1d(pool_size), lambda x: F.avg_pool1d(x, pool_size),
+                            nn.ReLU(), F.relu]:
+                            print(timeit.timeit(lambda: functional_test(fn, batches, seq_len), number=n_tries),
+                                    batches, seq_len, fn)

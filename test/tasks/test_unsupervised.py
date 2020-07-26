@@ -37,11 +37,12 @@ class Test_Unsupervised(unittest.TestCase):
     def test_PredictMaskedTask(self):
         null_task = PredictMaskedTask(self.identity, self.identity,
                     LambdaLoss(nn.CrossEntropyLoss()), allow_no_loss=True)
-        generic_task = GenericTask(self.identity, self.identity, LambdaLoss(nn.CrossEntropyLoss()))
-        npt.assert_array_equal(null_task(self.x)[0].detach().numpy(),
-                        generic_task(self.x)[0].detach().numpy())
-        npt.assert_array_equal(null_task(self.x)[1].detach().numpy(),
-                        generic_task(self.x)[1].detach().numpy())
+        generic_task = GenericTask(self.identity, self.identity,
+                    LambdaLoss(nn.CrossEntropyLoss()))
+        npt.assert_array_equal(null_task(self.x)[0].detach(),
+                        generic_task(self.x)[0].detach())
+        npt.assert_array_equal(null_task(self.x)[1].detach(),
+                        generic_task(self.x)[1].detach())
         # loss is nan because no positions are included in loss
         npt.assert_array_equal(null_task.loss(self.x).item(), float('nan'))
         # at least one position is inserted to avoid nan loss
