@@ -55,13 +55,17 @@ class Test_Conv(unittest.TestCase):
 
     def test_DilateConvCell(self):
         kernel_size = 3
-        layer = DilateConvCell(self.in_channels, self.out_channels, kernel_size)
+        layer = DilateConvCell(self.in_channels, self.out_channels, kernel_size, dilation=3)
         out = layer(self.x).detach()
+        self.assertEqual(out.shape, (self.batches, self.out_channels, self.length))
         #TODO: finish
-        # self.assertEqual(out.shape, (self.batches, self.out_channels, self.length))
 
     def test_DilateConvEncoder(self):
-        pass
+        kernel_size = 3
+        layer = DilateConvEncoder(self.in_channels, kernel_size, dilation=3,
+                                    n_cells=2, channel_growth_rate=2.)
+        out = layer(self.x).detach()
+        self.assertEqual(out.shape, (self.batches, self.in_channels * 2 * 2, self.length))
         #TODO: finish
 
 

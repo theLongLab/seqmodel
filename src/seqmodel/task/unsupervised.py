@@ -4,10 +4,10 @@ import torch
 import torch.nn as nn
 
 from seqmodel.seq.transform import N_BASE, LambdaModule, one_hot
-from seqmodel.run.task import GenericTask
+from seqmodel.task.task import GenericTask
 
 
-class PredictMaskedTask(GenericTask):
+class PredictMaskedToken(GenericTask):
 
     """
     Task for masked token prediction (Cloze) from BERT.
@@ -24,7 +24,7 @@ class PredictMaskedTask(GenericTask):
     """
     def __init__(self, encoder, decoder, loss_fn,
                 keep_prop=0., mask_prop=0., random_prop=0.,
-                mask_value=0, n_classes=N_BASE, allow_no_loss=False):
+                mask_value=0, n_classes=N_BASE, allow_nan_loss=False):
         self.set_mask_props(keep_prop, mask_prop, random_prop)
         preprocess = LambdaModule(self.generate_mask_and_permute, self.randomize_input,
                                     one_hot, self.mask_input)
@@ -32,7 +32,7 @@ class PredictMaskedTask(GenericTask):
 
         self.mask_value = mask_value
         self.n_classes = n_classes
-        self.allow_no_loss = allow_no_loss
+        self.allow_nan_loss = allow_nan_loss
         self._NO_LOSS_INDEX = 0
         self._MASK_INDEX = 1
         self._RANDOM_INDEX = 2
@@ -53,7 +53,7 @@ class PredictMaskedTask(GenericTask):
                     + (prob > self._random_cutoff).type(torch.int8) \
                     + (prob > self._keep_cutoff).type(torch.int8)
         del prob
-        if not self.allow_no_loss:
+        if not self.allow_nan_loss:
             if torch.sum(self.mask) == 0:  # no item was selected for calculating loss
                 self.mask[0, 0] = self._KEEP_INDEX  # unmask the first item
         return x  # need to pass x through preprocess

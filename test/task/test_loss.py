@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy.testing as npt
 
-from seqmodel.run.task import *
+from seqmodel.task.task import *
 from seqmodel.seq.mapseq import create_test_batch
 
 

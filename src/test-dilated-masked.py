@@ -1,0 +1,30 @@
+import torch
+import torch.nn as nn
+from seqmodel.model.conv import DilateConvEncoder, SeqFeedForward
+from seqmodel.task.task import LambdaLoss
+from seqmodel.task.unsupervised import PredictMaskedToken
+from seqmodel.seq.mapseq import MapSequence
+
+encoder = DilateConvEncoder(4, 3, 2, 2., 1, 3, 0.1)
+decoder = SeqFeedForward(encoder.out_channels, 4, 1, activation_fn=nn.ReLU)
+loss_fn = LambdaLoss(nn.CrossEntropyLoss())
+task = PredictMaskedToken(encoder, decoder, loss_fn, keep_prop=0.05, mask_prop=0.12, random_prop=0.03)
+dataset = MapSequence.from_file('test/data/grch38_excerpt.fa', 500, remove_gaps=True)
+data_loader = torch.utils.data.DataLoader(dataset, batch_size=20, shuffle=True, num_workers=4)
+optimizer = torch.optim.SGD(task.parameters(), lr=1.)
+
+device = torch.device('cpu')
+if torch.cuda.is_available():
+    device = torch.device('cuda')
+
+loss_sum = 0.
+for i, batch in enumerate(data_loader):
+    batch.to(device)
+    predicted, target, latent, loss = task.loss(batch)
+    loss_sum += loss.item()
+    loss.backward()
+    optimizer.step()
+    optimizer.zero_grad()
+    if i % 1000 == 0:
+        print(loss_sum / len(batch))
+        loss_sum = 0.
