@@ -17,20 +17,25 @@ class Test_Conv(unittest.TestCase):
 
     def test_CellModule(self):
         conv_list = [
-            nn.Conv1d(4, 10, 3),
-            nn.Conv1d(4, 10, 3, padding=5),
-            nn.Conv1d(4, 10, 5, stride=3),
-            nn.Conv1d(4, 10, 4, dilation=2),
+            nn.Conv1d(4, 4, 3),
+            nn.Conv1d(4, 4, 3, padding=5),
+            nn.Conv1d(4, 4, 5, stride=3),
+            nn.Conv1d(4, 4, 4, dilation=2),
             nn.Conv1d(4, 10, 4, padding=3, stride=2, dilation=2),
         ]
         for conv in conv_list:
             layer = CellModule([conv])
-            self.assertEqual(layer.out_seq_len(self.length), conv(self.x).shape[2])
+            tensor = conv(self.x)
+            self.assertEqual(layer.out_channels, tensor.shape[1])
+            self.assertEqual(layer.out_seq_len(self.length), tensor.shape[2])
+            npt.assert_array_equal(layer(self.x).detach(), tensor.detach())
         layer = CellModule(conv_list)
         tensor = self.x
         for conv in conv_list:
             tensor = conv(tensor)
-        self.assertEqual(layer.out_seq_len(self.length), conv(self.x).shape[2])
+        self.assertEqual(layer.out_channels, tensor.shape[1])
+        self.assertEqual(layer.out_seq_len(self.length), tensor.shape[2])
+        npt.assert_array_equal(layer(self.x).detach(), tensor.detach())
 
     def test_SeqFeedForward(self):
         layer = SeqFeedForward(self.in_channels, self.out_channels)
@@ -54,6 +59,10 @@ class Test_Conv(unittest.TestCase):
         out = layer(self.x).detach()
         #TODO: finish
         # self.assertEqual(out.shape, (self.batches, self.out_channels, self.length))
+
+    def test_DilateConvEncoder(self):
+        pass
+        #TODO: finish
 
 
 if __name__ == '__main__':

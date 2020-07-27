@@ -10,22 +10,26 @@ class CellModule(nn.Module):
         self.activation_fn = activation_fn
         self.layers = nn.Sequential(*layer_list)
 
-    # number of channels per sequence position
-    @property
-    def out_channels(self):
-        self.layers
-
     def forward(self, x):
         return self.layers(x)
+
+    # gets the output number of channels per sequence position
+    @property
+    def out_channels(self):
+        for module in reversed(list(self.modules())):
+            if hasattr(module, 'out_channels'):
+                channels = module.out_channels
+                break
+        return channels
 
     def out_seq_len(self, seq_len):
         for module in self.modules():
             if type(module) == nn.Conv1d:
-                #FIXME: this calculation is wrong
                 seq_len += 2 * module.padding[0] + module.stride[0]
-                seq_len -= module.kernel_size[0] * module.dilation[0]
+                seq_len -= module.kernel_size[0] + (module.kernel_size[0] - 1) * (module.dilation[0] - 1)
                 seq_len = seq_len // module.stride[0]
         return seq_len
+
 
 class SeqFeedForward(CellModule):
     """
