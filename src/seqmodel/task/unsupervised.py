@@ -61,7 +61,7 @@ class PredictMaskedToken(GenericTask):
     # apply to index vector
     def randomize_input(self, x):
         return x.masked_scatter(self.mask == self._RANDOM_INDEX,
-                torch.randint(self.n_classes, x.shape))
+                torch.randint_like(x, self.n_classes))
 
     # apply to one-hot vector
     def mask_input(self, x):
