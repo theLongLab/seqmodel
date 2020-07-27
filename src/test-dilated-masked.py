@@ -11,11 +11,13 @@ loss_fn = LambdaLoss(nn.CrossEntropyLoss())
 task = PredictMaskedToken(encoder, decoder, loss_fn, keep_prop=0.05, mask_prop=0.12, random_prop=0.03)
 dataset = MapSequence.from_file('test/data/grch38_excerpt.fa', 500, remove_gaps=True)
 data_loader = torch.utils.data.DataLoader(dataset, batch_size=20, shuffle=True, num_workers=4)
-optimizer = torch.optim.SGD(task.parameters(), lr=1.)
+optimizer = torch.optim.SGD(task.parameters(), lr=0.1)
 
 device = torch.device('cpu')
 if torch.cuda.is_available():
     device = torch.device('cuda')
+print(device)
+task.to(device)
 
 loss_sum = 0.
 for i, batch in enumerate(data_loader):
@@ -26,5 +28,5 @@ for i, batch in enumerate(data_loader):
     optimizer.step()
     optimizer.zero_grad()
     if i % 1000 == 0:
-        print(loss_sum / len(batch))
+        print(i, loss_sum / len(batch))
         loss_sum = 0.
