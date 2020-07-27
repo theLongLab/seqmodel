@@ -1,6 +1,43 @@
 import torch
 import torch.nn as nn
 
+from seqmodel.seq.transform import one_hot
+
+
+class GenericTask(nn.Module):
+
+    """
+    Task applying loss function to inputs.
+
+    Args:
+        encoder: first model applied to input, outputs latent
+        decoder: second model applied to input, outputs predicted
+        loss_fn: applied to (predicted, input, latent)
+        preprocess: nn.Module or function applied to input before encoder, with no_grad()
+    """
+    def __init__(self, encoder, decoder, loss_fn, preprocess=one_hot):
+        super().__init__()
+        self.preprocess = preprocess
+        self.encoder = encoder
+        self.decoder = decoder
+        self.loss_fn = loss_fn
+    
+    def forward(self, x):
+        with torch.no_grad():
+            inputs = self.preprocess(x)
+        latent = self.encoder(inputs)
+        predicted = self.decoder(latent)
+        return predicted, latent
+
+    def loss(self, x):
+        predicted, latent = self(x)
+        return predicted, x, latent, self.loss_fn(predicted, x, latent)
+
+    def evaluate(self, x, target):
+        predicted, latent = self(x)
+        return None  #TODO: when designing `train.py`
+
+
 class WeightedLoss(nn.Module):
 
     def __init__(self, loss_fn_and_weights):

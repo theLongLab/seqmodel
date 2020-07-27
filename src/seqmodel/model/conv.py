@@ -83,10 +83,11 @@ class DilateConvCell(CellModule):
 
 class DilateConvEncoder(CellModule):
 
-    def __init__(self, in_channels, kernel_size, do_pad=True,
-                n_cells=1, channel_growth_rate=1.,
+    def __init__(self, in_channels, kernel_size, n_cells=1, channel_growth_rate=1.,
                 hidden_layers_per_cell=0, dilation=1, dropout_rate=0.,
                 activation_fn=nn.ReLU, norm_layer=nn.BatchNorm1d, dropout_layer=nn.Dropout):
+        layers = []
+        channels = [int(in_channels * channel_growth_rate ** i) for i in range(n_cells + 1)]
         for i, j in zip(channels, channels[1:]):
             layers += [DilateConvCell(channels[i], channels[j], kernel_size,
                         hidden_layers_per_cell, dilation, dropout_rate,
