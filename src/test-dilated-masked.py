@@ -11,7 +11,7 @@ loss_fn = LambdaLoss(nn.CrossEntropyLoss())
 task = PredictMaskedToken(encoder, decoder, loss_fn, keep_prop=0.05, mask_prop=0.12, random_prop=0.03)
 dataset = MapSequence.from_file('data/ref_genome/chr22.fa', 500, remove_gaps=True)
 data_loader = torch.utils.data.DataLoader(dataset, batch_size=20, shuffle=True, num_workers=4)
-optimizer = torch.optim.SGD(task.parameters(), lr=0.1)
+optimizer = torch.optim.Adam(task.parameters(), lr=0.1)
 
 device = torch.device('cpu')
 if torch.cuda.is_available():

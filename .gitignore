@@ -3,3 +3,4 @@
 outputs/**
 data/**
 data
+lightning_logs
