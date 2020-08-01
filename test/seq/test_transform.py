@@ -44,10 +44,10 @@ class Test_Transforms(unittest.TestCase):
         predictions = softmax_to_index(tensor)
         self.assertEqual(predictions.shape, (1, len(self.test_indexes)))
         npt.assert_array_equal(predictions, one_hot_to_index(tensor))
-        predictions = softmax_to_index(one_hot(self.indexes).float(), prediction_threshold= -2.)
+        predictions = softmax_to_index(one_hot(self.indexes).float(), threshold_score= -2.)
         self.assertEqual(predictions.shape, (self.batches, self.seq_len))
         npt.assert_array_equal(predictions, self.indexes)
-        predictions = softmax_to_index(one_hot(self.indexes).float(), prediction_threshold=2.)
+        predictions = softmax_to_index(one_hot(self.indexes).float(), threshold_score=2.)
         npt.assert_array_equal(predictions, np.ones(predictions.shape) * EMPTY_INDEX)
 
     def test_reverse_complement(self):

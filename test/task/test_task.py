@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import numpy.testing as npt
 
 from seqmodel.task.task import *
+from seqmodel.seq.transform import one_hot
 from seqmodel.seq.mapseq import create_test_batch
 
 
@@ -29,7 +30,7 @@ class Test_Task(unittest.TestCase):
         self.assertEqual(task.loss(x)[3].item(), 0.)
 
         # need very large scores for cross entropy to softmax to 1.0 and 0.0
-        large_num = 1000000.
+        large_num = 1e6
         task = GenericTask(self.identity, lambda x: x * large_num,
                     LambdaLoss(nn.CrossEntropyLoss()))
         predicted, latent = task(self.batch)

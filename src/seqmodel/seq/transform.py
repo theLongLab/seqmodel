@@ -39,10 +39,10 @@ def one_hot(index_sequence, indexes=range(N_BASE), dim=1):
 def one_hot_to_index(x):
     return torch.argmax(x, dim=1)
 
-def softmax_to_index(tensor, prediction_threshold=float('-inf'),
+def softmax_to_index(tensor, threshold_score=float('-inf'),
                     no_prediction_index=EMPTY_INDEX):
     values, indexes = torch.max(tensor, dim=1)
-    return indexes.masked_fill((values < prediction_threshold), no_prediction_index)
+    return indexes.masked_fill((values < threshold_score), no_prediction_index)
 
 # below functions for one hot tensors
 def complement(x):

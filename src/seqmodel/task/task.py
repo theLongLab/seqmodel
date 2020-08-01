@@ -33,10 +33,6 @@ class GenericTask(nn.Module):
         predicted, latent = self(x)
         return predicted, x, latent, self.loss_fn(predicted, x, latent)
 
-    def evaluate(self, x, target):
-        predicted, latent = self(x)
-        return None  #TODO: when designing `train.py`
-
 
 class WeightedLoss(nn.Module):
 
