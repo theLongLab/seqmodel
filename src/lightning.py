@@ -6,6 +6,9 @@ from seqmodel.model.conv import DilateConvEncoder, SeqFeedForward
 from seqmodel.task.task import LambdaLoss
 from seqmodel.task.unsupervised import PredictMaskedToken
 from seqmodel.seq.mapseq import MapSequence
+from seqmodel.seq.transform import INDEX_TO_BASE
+from seqmodel.task.log import prediction_histograms, normalize_histogram, \
+                            summarize, correct, accuracy_per_class
 
 
 class DilatedMasked(LightningModule):
@@ -19,19 +22,39 @@ class DilatedMasked(LightningModule):
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.task.parameters(), lr=0.1)
-    
+
     def forward(self, x):
         return self.task(x)
 
     def training_step(self, batch, batch_idx):
-        predicted, target, latent, loss = self.task.loss(batch)
-        tensorboard_logs = {'train_loss': loss}
-        return {'loss': loss, 'log': tensorboard_logs}
+        predicted, masked_predicted, masked_target, latent, mask, loss = self.task.loss(batch)
+        str_train_sample = summarize(mask + 4, batch, correct(predicted, batch),
+                predicted.permute(1, 0, 2), index_symbols=INDEX_TO_BASE + [' ', '_', '?', '='])
+        hist = prediction_histograms(predicted, batch, n_bins=3)
+        acc = normalize_histogram(hist)
+        acc_numbers = accuracy_per_class(hist)
+        str_acc = summarize(acc, col_labels=INDEX_TO_BASE, normalize_fn=None)
+        print(acc_numbers, str_acc, str_train_sample, sep='\n')
+        return {'loss': loss,
+                'log': {'train_loss': loss}}
+
+    # def validation_step(self, batch, batch_idx):
+    #     {'loss': ,
+    #     'correct': ,}
+    #     result.log('val_loss', loss)
+
+    # def validation_epoch_end(self, val_step_outputs):
+
+    #     result = pl.EvalResult(checkpoint_on=loss)
+    #     result.log('val_loss', loss)
 
 
-dataset = MapSequence.from_file('data/ref_genome/chr22.fa', 500, remove_gaps=True)
-data_loader = torch.utils.data.DataLoader(dataset, batch_size=20, shuffle=True, num_workers=4)
+train_data = MapSequence.from_file('data/ref_genome/chr22_excerpt_4m.fa', 500, remove_gaps=True)
+valid_data = MapSequence.from_file('data/ref_genome/chr22_excerpt_800k.fa', 500, remove_gaps=True)
+train_loader = torch.utils.data.DataLoader(train_data, batch_size=20, shuffle=True, num_workers=4)
+valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=20, shuffle=False, num_workers=4)
 
 model = DilatedMasked()
-trainer = pl.Trainer()
-trainer.fit(model, data_loader)
+trainer = pl.Trainer(gpus=0)
+trainer.fit(model, train_loader)
+

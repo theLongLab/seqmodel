@@ -27,7 +27,7 @@ class Test_Task(unittest.TestCase):
         predicted, latent = task(x)
         npt.assert_array_equal(latent, x)
         npt.assert_array_equal(predicted, x)
-        self.assertEqual(task.loss(x)[3].item(), 0.)
+        self.assertEqual(task.loss(x)[0].item(), 0.)
 
         # need very large scores for cross entropy to softmax to 1.0 and 0.0
         large_num = 1e6
@@ -36,8 +36,7 @@ class Test_Task(unittest.TestCase):
         predicted, latent = task(self.batch)
         npt.assert_array_equal(latent, x)
         npt.assert_array_equal(predicted, x * large_num)
-        self.assertEqual(task.loss(self.batch)[3].item(), 0.)
-        #TODO test evaluate()
+        self.assertEqual(task.loss(self.batch)[0].item(), 0.)
 
     def test_NeighbourDistanceLoss(self):
         alternating = torch.tensor([[[1., - 1.] * 27] * 4] * 10)

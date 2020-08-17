@@ -61,6 +61,12 @@ class Test_Transforms(unittest.TestCase):
             npt.assert_array_equal(reverse(complement(tensor)), reverse_complement(tensor))
             npt.assert_array_equal(reverse_complement(complement(reverse((tensor)))), tensor)
 
+    def test_swap(self):
+        y1 = self.test_1h_tensor
+        y2 = swap(y1)
+        npt.assert_array_equal(y1[:, :2, :], y2[:, 2:4, :])
+        npt.assert_array_equal(y1[:, 2:4, :], y2[:, :2, :])
+
     def test_LambdaModule(self):
         fn = LambdaModule(one_hot, one_hot_to_index)
         npt.assert_array_equal(fn(self.test_indexes), self.test_indexes)

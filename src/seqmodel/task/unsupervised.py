@@ -73,10 +73,11 @@ class PredictMaskedToken(GenericTask):
         target_mask = self.mask != self._NO_LOSS_INDEX
         # need to permute to broadcast mask
         # then permute back after getting correct shape
-        predicted = predicted.permute(1, 0, 2).masked_select(
+        masked_predicted = predicted.permute(1, 0, 2).masked_select(
                     target_mask).reshape(self.n_classes, -1).permute(1, 0)
-        target = x.masked_select(target_mask)
-        return predicted, target, latent, self.loss_fn(predicted, target, latent)
+        masked_target = x.masked_select(target_mask)
+        loss = self.loss_fn(masked_predicted, masked_target, latent)
+        return loss, predicted, masked_predicted, masked_target, latent, self.mask,
 
 
 class ReconstructionTask(GenericTask):

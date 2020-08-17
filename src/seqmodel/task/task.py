@@ -31,7 +31,7 @@ class GenericTask(nn.Module):
 
     def loss(self, x):
         predicted, latent = self(x)
-        return predicted, x, latent, self.loss_fn(predicted, x, latent)
+        return self.loss_fn(predicted, x, latent), predicted, x, latent
 
 
 class WeightedLoss(nn.Module):

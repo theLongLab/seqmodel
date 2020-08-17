@@ -54,6 +54,10 @@ def reverse(x):
 def reverse_complement(x):
     return torch.flip(x, [1, 2])
 
+def swap(x, dim=1):
+    a, b = torch.split(x, x.shape[dim] // 2, dim=dim)
+    return torch.cat([b, a], dim=dim)
+
 
 class LambdaModule(nn.Module):
 
