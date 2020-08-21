@@ -32,8 +32,7 @@ class GroupConv1d(nn.Conv1d):
 class v2GroupConv1d(nn.Conv1d):
 
     def __init__(self, in_channels, out_channels, kernel_size, in_from_group=False,
-                stride=1, padding=0, dilation=1, groups=1, bias=True,
-                do_reverse=True, do_complement=True):
+                stride=1, padding=0, dilation=1, groups=1, bias=True):
 
         super(v2GroupConv1d, self).__init__(in_channels, out_channels // 4, kernel_size,
                 stride=stride, padding=padding, dilation=dilation, groups=groups, bias=bias)
@@ -59,7 +58,15 @@ class v2GroupConv1d(nn.Conv1d):
                     complement(x),
                 ], dim=0)
         y_all = super(v2GroupConv1d, self).forward(x_all)
-        return y_all.view(x.shape[0], self.out_channels * 4, -1)
+        y = y_all.view(x.shape[0], self.out_channels * 4, -1)
+        print(y.shape)
+        y, y_rc, y_r, y_c = torch.split(y, y.shape[1] // 4, dim=1)
+        return torch.cat([
+                y,
+                reverse_complement(y_rc),
+                reverse(y_r),
+                complement(y_c),
+            ])
 
 
 class RCIConv1d(nn.Conv1d):
@@ -68,31 +75,34 @@ class RCIConv1d(nn.Conv1d):
                 stride=1, padding=0, dilation=1, groups=1, bias=True,
                 do_reverse=True, do_complement=True):
 
-        transforms = [nn.Identity()]
+        t_in, t_out = [nn.Identity()], [nn.Identity()]
         if do_reverse and do_complement:
             if in_from_rci:
-                transforms += [lambda x: swap(reverse_complement(x))]
+                t_in += [lambda x: reverse_complement(swap(x))]
             else:
-                transforms += [reverse_complement]
+                t_in += [reverse_complement]
+            t_out += [reverse_complement]
         if do_reverse:
             if in_from_rci:
-                transforms += [lambda x: reverse(swap(x))]
+                t_in += [lambda x: reverse(swap(x))]
             else:
-                transforms += [reverse]
+                t_in += [reverse]
+            t_out += [reverse]
         if do_complement:
-            transforms += [complement]
-        assert out_channels % len(transforms) == 0
+            t_in += [complement]
+            t_out += [complement]
+        assert out_channels % len(t_in) == 0
 
-        super().__init__(in_channels, out_channels // len(transforms), kernel_size,
+        super().__init__(in_channels, out_channels // len(t_in), kernel_size,
                 stride=stride, padding=padding, dilation=dilation, groups=groups, bias=bias)
-        self._transforms = transforms
-        self.out_channels = out_channels
+        self._transforms_in = t_in
+        self._transforms_out = t_out
 
     # output channels are ordered as (normal, reverse_complement, reverse, complement)
     # complementation is still meaningful by flipping (reversing) the channel dimension
     def forward(self, x):
-        return torch.cat([t(super(RCIConv1d, self).forward(t(x)))
-                        for t in self._transforms], dim=1)
+        return torch.cat([t_out(super(RCIConv1d, self).forward(t_in(x)))
+                        for t_in, t_out in zip(self._transforms_in, self._transforms_out)], dim=1)
     
 
 # stack outputs of arbitrary modules along dimension

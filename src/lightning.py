@@ -27,7 +27,7 @@ class DilatedMasked(LightningModule):
         return self.task(x)
 
     def training_step(self, batch, batch_idx):
-        predicted, masked_predicted, masked_target, latent, mask, loss = self.task.loss(batch)
+        loss, predicted, masked_predicted, masked_target, latent, mask = self.task.loss(batch)
         str_train_sample = summarize(mask + 4, batch, correct(predicted, batch),
                 predicted.permute(1, 0, 2), index_symbols=INDEX_TO_BASE + [' ', '_', '?', '='])
         hist = prediction_histograms(predicted, batch, n_bins=3)
@@ -55,6 +55,6 @@ train_loader = torch.utils.data.DataLoader(train_data, batch_size=20, shuffle=Tr
 valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=20, shuffle=False, num_workers=4)
 
 model = DilatedMasked()
-trainer = pl.Trainer(gpus=0)
+trainer = pl.Trainer(gpus=1)
 trainer.fit(model, train_loader)
 
