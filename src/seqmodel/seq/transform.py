@@ -19,11 +19,10 @@ N_BASE = 4
 
 # only works on one sequence at a time (1 dimension)
 def bioseq_to_index(bioseq):
-    str_array = np.array(bioseq)
+    str_array = np.array(list(bioseq))
     int_array = np.empty(len(bioseq), dtype='int8')
     for base, index in BASE_TO_INDEX.items():
-        match = (str_array == base)
-        # print(base, index, match, str_array)
+        match = np.char.equal(str_array, base)
         int_array[match] = index
     return torch.LongTensor(int_array)
 
