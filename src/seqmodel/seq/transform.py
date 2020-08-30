@@ -58,7 +58,8 @@ def swap(x, dim=1):
     return torch.cat([b, a], dim=dim)
 
 
-class LambdaModule(nn.Module):
+# composes multiple functions together
+class Compose(nn.Module):
 
     def __init__(self, *fn_list):
         super().__init__()

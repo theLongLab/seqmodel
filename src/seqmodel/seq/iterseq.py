@@ -1,8 +1,9 @@
 import sys
 sys.path.append('./src')
 from math import log, sqrt
-import torch
 import numpy as np
+import pandas as pd
+import torch
 from pyfaidx import Fasta
 from torch.utils.data import IterableDataset
 
@@ -12,25 +13,29 @@ from seqmodel.seq.transform import bioseq_to_index
 def fasta_from_file(fasta_filename):
     return Fasta(fasta_filename, as_raw=True)  # need as_raw=True to return strings
 
+def bed_from_file(bed_filename):
+    pd.read_csv(bed_filename, sep='\t', names=['chr', 'start', 'end'])
+
+
 # set batch_size=None in data loader
 class IterSequence(IterableDataset):
 
-    def __init__(self, fasta_filename, seq_len, included_intervals=None,
+    def __init__(self, fasta_filename, seq_len, include_intervals=None,
                 sequential=False, stride=0, start_offset=-1):
         self.fasta = fasta_from_file(fasta_filename)
         self.seq_len = seq_len
         self._cutoff = self.seq_len - 1
 
-        if included_intervals is None:  # use entire fasta sequence
+        if include_intervals is None:  # use entire fasta sequence
             lengths = [len(seq) - self._cutoff for seq in self.fasta.values()]
             self.keys = list(self.fasta.keys())
             self.coord_offsets = [0] * len(self.fasta.keys())
         else:  # make table of intervals
             # if length is negative, remove interval (set length to 0)
             lengths = [max(0, y - x - self._cutoff)
-                        for x, y in zip(included_intervals['start'], included_intervals['end'])]
-            self.keys = included_intervals['chr']
-            self.coord_offsets = list(included_intervals['start'])
+                        for x, y in zip(include_intervals['start'], include_intervals['end'])]
+            self.keys = include_intervals['chr']
+            self.coord_offsets = list(include_intervals['start'])
         self.n_seq = np.sum(lengths)
         self.last_indexes = np.cumsum(lengths)
 

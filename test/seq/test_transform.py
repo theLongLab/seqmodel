@@ -67,12 +67,12 @@ class Test_Transforms(unittest.TestCase):
         npt.assert_array_equal(y1[:, :2, :], y2[:, 2:4, :])
         npt.assert_array_equal(y1[:, 2:4, :], y2[:, :2, :])
 
-    def test_LambdaModule(self):
-        fn = LambdaModule(one_hot, one_hot_to_index)
+    def test_Compose(self):
+        fn = Compose(one_hot, one_hot_to_index)
         npt.assert_array_equal(fn(self.test_indexes), self.test_indexes)
-        fn = LambdaModule(index_to_bioseq, bioseq_to_index)
+        fn = Compose(index_to_bioseq, bioseq_to_index)
         npt.assert_array_equal(fn(self.indexes.flatten()), self.indexes.flatten())
-        fn = LambdaModule(one_hot, reverse, complement, reverse_complement)
+        fn = Compose(one_hot, reverse, complement, reverse_complement)
         npt.assert_array_equal(fn(self.indexes), one_hot(self.indexes))
 
 
