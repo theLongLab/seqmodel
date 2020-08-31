@@ -8,16 +8,20 @@ from pytorch_lightning.core.lightning import LightningModule
 from pytorch_lightning import Trainer, seed_everything
 
 from seqmodel.model.conv import DilateConvEncoder, SeqFeedForward
+from seqmodel.model.attention import SinusoidalPosition
 from seqmodel.task.task import LambdaLoss
 from seqmodel.task.mask import PositionMask
-from seqmodel.seq.mapseq import MapSequence, RandomRepeatSequence
+from seqmodel.seq.mapseq import RandomRepeatSequence
+from seqmodel.seq.iterseq import StridedSequence, bed_from_file
 from seqmodel.seq.transform import INDEX_TO_BASE, Compose, one_hot_to_index
 from seqmodel.task.log import prediction_histograms, normalize_histogram, \
                             summarize, correct, accuracy_per_class
 
+
 def print_and_pass(x):
     print(x.shape, torch.min(x), torch.std_mean(x), torch.max(x))
     return x
+
 
 class SeqBERT(LightningModule):
 
@@ -27,7 +31,14 @@ class SeqBERT(LightningModule):
         # encoder = DilateConvEncoder(4, 3, 2, 2., 1, 3, 0.1)
         # decoder = SeqFeedForward(encoder.out_channels, 4, hidden_layers=self.hparams.n_decode_layers - 1,
         #                         activation_fn=nn.ReLU)
-        self.embedding = nn.Embedding(4, self.hparams.n_dims)
+        if self.hparams.position_embedding == 'Sinusoidal':
+            self.embedding = nn.Sequential(
+                nn.Embedding(4, self.hparams.n_dims),
+                SinusoidalPosition(self.hparams.n_dims, dropout=self.hparams.dropout,
+                                    max_len=self.hparams.seq_len),
+                )
+        else:
+            self.embedding = nn.Embedding(4, self.hparams.n_dims)
         self.transformer = nn.TransformerEncoder(
                 nn.TransformerEncoderLayer(self.hparams.n_dims, self.hparams.n_heads,
                                     self.hparams.feedforward_dims, self.hparams.dropout),
@@ -35,9 +46,8 @@ class SeqBERT(LightningModule):
         self.decoder = SeqFeedForward(self.hparams.n_dims, 4, hidden_layers=self.hparams.n_decode_layers - 1,
                                 activation_fn=nn.ReLU)
         self.loss_fn = nn.CrossEntropyLoss()
-        self.mask = PositionMask(keep_prop=self.hparams.keep_prop,
-                            mask_prop=self.hparams.mask_prop,
-                            random_prop=self.hparams.random_prop)
+        self.mask = PositionMask(mask_prop=self.hparams.mask_prop, random_prop=self.hparams.random_prop,
+                                    keep_prop=self.hparams.keep_prop,)
 
     def configure_optimizers(self):
         return torch.optim.Adam(chain(self.embedding.parameters(), self.transformer.parameters(),
@@ -67,31 +77,39 @@ class SeqBERT(LightningModule):
 
     def train_dataloader(self):
         if self.hparams.DEBUG_use_random_data:
-            train_data = RandomRepeatSequence(500, n_batch=10000, n_repeats=500,
+            train_data = RandomRepeatSequence(self.hparams.seq_len, n_batch=10000,
+                                n_repeats=self.hparams.DEBUG_random_n_repeats,
                                 repeat_len=self.hparams.DEBUG_random_repeat_len)
         else:
-            train_data = MapSequence.from_file('data/ref_genome/chr22_excerpt_4m.fa', 500, remove_gaps=True)
+            # train_data = MapSequence.from_file('data/ref_genome/chr22_excerpt_4m.fa', 500, remove_gaps=True)
+            intervals = bed_from_file(self.hparams.train_intervals)
+            train_data = StridedSequence.from_file(
+                self.hparams.seq_file, self.hparams.seq_len, include_intervals=intervals)
         return torch.utils.data.DataLoader(train_data, batch_size=self.hparams.batch_size,
-                            shuffle=True, num_workers=self.hparams.num_workers)
+                                            num_workers=self.hparams.num_workers)
 
     def val_dataloader(self):
         if self.hparams.DEBUG_use_random_data:
-            valid_data = RandomRepeatSequence(500, n_batch=100, n_repeats=500,
+            valid_data = RandomRepeatSequence(self.hparams.seq_len, n_batch=100,
+                                n_repeats=self.hparams.DEBUG_random_n_repeats,
                                 repeat_len=self.hparams.DEBUG_random_repeat_len)
         else:
-            valid_data = MapSequence.from_file('data/ref_genome/chr22_excerpt_800k.fa', 500, remove_gaps=True)
+            # valid_data = MapSequence.from_file('data/ref_genome/chr22_excerpt_800k.fa', 500, remove_gaps=True)
+            intervals = bed_from_file(self.hparams.valid_intervals)
+            valid_data = StridedSequence.from_file(
+                self.hparams.seq_file, self.hparams.seq_len, include_intervals=intervals)
         return torch.utils.data.DataLoader(valid_data, batch_size=self.hparams.batch_size,
-                            shuffle=False, num_workers=self.hparams.num_workers)
+                                            num_workers=self.hparams.num_workers)
 
     def validation_step(self, batch, batch_idx):
         loss, predicted, _, _ = self.masked_forward(batch)
         str_train_sample = summarize(self.mask.mask_val + 4, batch, correct(predicted, batch),
                 predicted.permute(1, 0, 2), index_symbols=INDEX_TO_BASE + [' ', '_', '?', '='])
-        # hist = prediction_histograms(predicted, batch, n_bins=3)
-        # acc = normalize_histogram(hist)
-        # acc_numbers = accuracy_per_class(hist)
-        # str_acc = summarize(acc, col_labels=INDEX_TO_BASE, normalize_fn=None)
-        # print(acc_numbers, str_acc, str_train_sample, sep='\n')
+        hist = prediction_histograms(predicted.detach().cpu(), batch.detach().cpu(), n_bins=3)
+        acc = normalize_histogram(hist)
+        acc_numbers = accuracy_per_class(hist)
+        str_acc = summarize(acc, col_labels=INDEX_TO_BASE, normalize_fn=None)
+        print(acc_numbers, str_acc, str_train_sample, sep='\n')
         print('', str_train_sample, sep='\n')
         return {'loss': loss,
                 'log': {
@@ -117,44 +135,28 @@ class SeqBERT(LightningModule):
         parser.add_argument('--n_decode_layers', default=1, type=int)
         parser.add_argument('--feedforward_dims', default=512, type=int)
         parser.add_argument('--dropout', default=0.1, type=float)
+        parser.add_argument('--position_embedding', default='Sinusoidal', type=str)
 
-        # task params
+        # training params
         parser.add_argument('--keep_prop', default=0.05, type=float)
         parser.add_argument('--mask_prop', default=0.08, type=float)
         parser.add_argument('--random_prop', default=0.02, type=float)
-
-        # training params
         parser.add_argument('--num_workers', default=4, type=int)
-        parser.add_argument('--epochs', default=20, type=int)
         parser.add_argument('--batch_size', default=64, type=int)
         parser.add_argument('--learning_rate', default=1e-3, type=float)
 
         #data params
+        parser.add_argument('--seq_file', default='data/ref_genome/p12/assembled_chr/GRCh38_p12_assembled_chr.fa', type=str)
+        parser.add_argument('--train_intervals', default='data/ref_genome/grch38-train.bed', type=str)
+        parser.add_argument('--valid_intervals', default='data/ref_genome/grch38-1M-valid.bed', type=str)
+        parser.add_argument('--seq_len', default=500, type=int)
         parser.add_argument('--DEBUG_use_random_data', default=False, type=bool)
         parser.add_argument('--DEBUG_random_repeat_len', default=1, type=int)
+        parser.add_argument('--DEBUG_random_n_repeats', default=500, type=int)
         return parser
 
 
-class LambdaUnsupervisedDataset(torch.utils.data.Dataset):
-
-    def __init__(self, dataset):
-        self.dataset = dataset
-
-    def __len__(self):
-        return len(self.dataset)
-
-    def __getitem__(self, index):
-        return self.dataset[index], None
-
-
-def main(args):
-    seed_everything(0)
-    model = SeqBERT(**vars(args))
-    trainer = Trainer.from_argparse_args(args)
-    trainer.fit(model)
-
-
-def run_cli():
+def main():
     root_dir = os.path.dirname(os.path.realpath(__file__))
     parent_parser = ArgumentParser(add_help=False)
 
@@ -162,8 +164,12 @@ def run_cli():
     parser = Trainer.add_argparse_args(parser)
     parser.set_defaults(gpus=1)
     args = parser.parse_args()
-    main(args)
+
+    seed_everything(0)
+    model = SeqBERT(**vars(args))
+    trainer = Trainer.from_argparse_args(args)
+    trainer.fit(model)
 
 
 if __name__ == '__main__':
-    run_cli()
+    main()

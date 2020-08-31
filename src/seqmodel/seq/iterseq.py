@@ -10,19 +10,18 @@ from torch.utils.data import IterableDataset
 from seqmodel.seq.transform import bioseq_to_index
 
 
+def bed_from_file(bed_filename):
+    return pd.read_csv(bed_filename, sep='\t', names=['chr', 'start', 'end'])
+
 def fasta_from_file(fasta_filename):
     return Fasta(fasta_filename, as_raw=True)  # need as_raw=True to return strings
 
-def bed_from_file(bed_filename):
-    pd.read_csv(bed_filename, sep='\t', names=['chr', 'start', 'end'])
 
+class StridedSequence(IterableDataset):
 
-# set batch_size=None in data loader
-class IterSequence(IterableDataset):
-
-    def __init__(self, fasta_filename, seq_len, include_intervals=None,
+    def __init__(self, pyfaidx_fasta, seq_len, include_intervals=None,
                 sequential=False, stride=0, start_offset=-1):
-        self.fasta = fasta_from_file(fasta_filename)
+        self.fasta = pyfaidx_fasta
         self.seq_len = seq_len
         self._cutoff = self.seq_len - 1
 
@@ -43,19 +42,25 @@ class IterSequence(IterableDataset):
             self.stride = 1
             self.start_offset = 0
         else:
-            if stride > 0:
-                self.stride = stride
-            else:
+            if stride is None:
                 # make sure total positions is odd (this guarantees stride covers all positions)
                 if self.n_seq % 2 == 0:
                     self.n_seq -= 1
                 # nearest power of 2 to square root of self.n_seq, this gives nicely spaced positions
                 self.stride = 2 ** int(round(log(sqrt(self.n_seq), 2)))
+            else:
+                self.stride = stride
             # randomly assign start position (this will be different for each dataloader worker)
-            if start_offset < 0:
+            if start_offset is None:
                 self.start_offset = torch.randint(self.n_seq, [1]).item()
             else:
                 self.start_offset = start_offset
+
+    @classmethod
+    def from_file(cls, fasta_filename, seq_len, include_intervals=None,
+                sequential=False, stride=0, start_offset=-1):
+        fasta = fasta_from_file(fasta_filename)  # need as_raw=True to return strings
+        return cls(fasta, seq_len, include_intervals, sequential, stride, start_offset)
 
     def index_to_coord(self, i):
         index = (i * self.stride + self.start_offset) % self.n_seq

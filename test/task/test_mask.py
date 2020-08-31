@@ -26,21 +26,51 @@ class Test_PositionMask(unittest.TestCase):
         self.assertEqual(self.mask.mask_val[0, 0].item(), PositionMask._KEEP_INDEX)
 
     def test_set_mask_props(self):
+        def assert_equal_props(mask_1, mask_2):
+            self.assertEqual(mask_1._mask_cutoff, mask_2._mask_cutoff)
+            self.assertEqual(mask_1._random_cutoff, mask_2._random_cutoff)
+            self.assertEqual(mask_1._keep_cutoff, mask_2._keep_cutoff)
+
         self.mask.set_mask_props(1., 0., 0.)
+        self.assertEqual(self.mask._mask_cutoff, 0.)
+        self.assertEqual(self.mask._random_cutoff, 1.)
+        self.assertEqual(self.mask._keep_cutoff, 1.)
+        assert_equal_props(self.mask, PositionMask(1., 0., 0.))
         self.mask.generate(self.x)
         npt.assert_array_equal(self.mask.mask_val, torch.ones(self.x.shape, dtype=torch.int8) * PositionMask._MASK_INDEX)
+
         self.mask.set_mask_props(0., 1., 0.)
+        self.assertEqual(self.mask._mask_cutoff, 0.)
+        self.assertEqual(self.mask._random_cutoff, 0.)
+        self.assertEqual(self.mask._keep_cutoff, 1.)
+        assert_equal_props(self.mask, PositionMask(0., 1., 0.))
         self.mask.generate(self.x)
         npt.assert_array_equal(self.mask.mask_val, torch.ones(self.x.shape, dtype=torch.int8) * PositionMask._RANDOM_INDEX)
+
         self.mask.set_mask_props(0., 0., 1.)
+        self.assertEqual(self.mask._mask_cutoff, 0.)
+        self.assertEqual(self.mask._random_cutoff, 0.)
+        self.assertEqual(self.mask._keep_cutoff, 0.)
+        assert_equal_props(self.mask, PositionMask(0., 0., 1.))
         self.mask.generate(self.x)
         npt.assert_array_equal(self.mask.mask_val, torch.ones(self.x.shape, dtype=torch.int8) * PositionMask._KEEP_INDEX)
-        self.mask.set_mask_props(0.25, 0.25, 0.25)
+
+        self.mask.set_mask_props(0.1, 0.2, 0.5)
+        self.assertAlmostEqual(self.mask._mask_cutoff, 0.2)
+        self.assertAlmostEqual(self.mask._random_cutoff, 0.3)
+        self.assertAlmostEqual(self.mask._keep_cutoff, 0.5)
+        assert_equal_props(self.mask, PositionMask(0.1, 0.2, 0.5))
         self.mask.generate(self.x)
+
         mask1 = self.mask.mask_val
         self.mask.generate(self.x)
         mask2 = self.mask.mask_val
         self.assertFalse(torch.all(mask1 == mask2))
+        n_mask = torch.sum(self.mask.mask_val == PositionMask._MASK_INDEX)
+        n_random = torch.sum(self.mask.mask_val == PositionMask._RANDOM_INDEX)
+        n_keep = torch.sum(self.mask.mask_val == PositionMask._KEEP_INDEX)
+        self.assertLess(n_mask, n_random)
+        self.assertLess(n_random, n_keep)
 
     def test_randomize_input(self):
         self.mask.set_mask_props(random_prop=1.)

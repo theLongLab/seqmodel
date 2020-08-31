@@ -30,7 +30,7 @@ class PositionMask():
 
     def __init__(self, mask_prop=0., random_prop=0., keep_prop=0., n_classes=N_BASE):
         self.n_classes = n_classes
-        self.set_mask_props(keep_prop, mask_prop, random_prop)
+        self.set_mask_props(mask_prop, random_prop, keep_prop)
 
     def set_mask_props(self, mask_prop=0., random_prop=0.,keep_prop=0.):
         no_loss_prop = 1. - (mask_prop + random_prop + keep_prop)
@@ -43,7 +43,7 @@ class PositionMask():
     # generate from index vector size
     def generate(self, x, require_loss_pos=True):
         prob = torch.rand_like(x, dtype=torch.float32)
-        self.mask_val = (prob > self._mask_cutoff).type(torch.int8)     \
+        self.mask_val = (prob > self._mask_cutoff).type(torch.int8) \
                     + (prob > self._random_cutoff).type(torch.int8) \
                     + (prob > self._keep_cutoff).type(torch.int8)
         del prob
