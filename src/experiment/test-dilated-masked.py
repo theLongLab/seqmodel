@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 from seqmodel.model.conv import DilateConvEncoder, SeqFeedForward
-from seqmodel.task.task import LambdaLoss
-from seqmodel.task.mask import PositionMask
-from seqmodel.seq.mapseq import MapSequence
+from seqmodel.functional.task import LambdaLoss
+from seqmodel.functional.mask import PositionMask
+from seqmodel.seqdata.mapseq import MapSequence
 
 encoder = DilateConvEncoder(4, 3, 2, 2., 1, 3, 0.1)
 decoder = SeqFeedForward(encoder.out_channels, 4, 1, activation_fn=nn.ReLU)

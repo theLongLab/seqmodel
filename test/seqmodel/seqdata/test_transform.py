@@ -8,8 +8,8 @@ import torch
 import torch.nn as nn
 import numpy.testing as npt
 
-from seqmodel.seq.transform import *
-from seqmodel.seq.mapseq import random_bioseq
+from seqmodel.functional.transform import *
+from seqmodel.seqdata.mapseq import random_bioseq
 
 
 class Test_Transforms(unittest.TestCase):

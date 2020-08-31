@@ -3,7 +3,7 @@ sys.path.append('./src')
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from seqmodel.seq.transform import complement, reverse, reverse_complement, swap
+from seqmodel.functional.transform import complement, reverse, reverse_complement, swap
 
 
 class GroupConv1d(nn.Conv1d):

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-python src/seqbert.py \
+python src/experiment/seqbert.py \
     --n_dims=256 \
     --n_heads=2 \
     --n_layers=2 \
@@ -12,7 +12,6 @@ python src/seqbert.py \
     --mask_prop=0.1 \
     --random_prop=0.02 \
     --num_workers=4 \
-    --epochs=10 \
     --batch_size=32 \
     --learning_rate=3e-4 \
     --seq_file=data/ref_genome/p12/assembled_chr/GRCh38_p12_assembled_chr.fa \

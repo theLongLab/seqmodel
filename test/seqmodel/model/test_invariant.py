@@ -5,8 +5,8 @@ import torch.nn as nn
 import numpy.testing as npt
 
 from seqmodel.model.invariant import *
-from seqmodel.seq.transform import complement, reverse, reverse_complement, one_hot, swap
-from seqmodel.seq.mapseq import create_test_batch
+from seqmodel.functional.transform import complement, reverse, reverse_complement, one_hot, swap
+from seqmodel.seqdata.mapseq import create_test_batch
 
 
 class Test_Invariant(unittest.TestCase):

@@ -1,3 +1,5 @@
+import sys
+sys.path.append('./src')
 import os.path
 from itertools import chain
 from argparse import ArgumentParser
@@ -9,11 +11,10 @@ from pytorch_lightning import Trainer, seed_everything
 
 from seqmodel.model.conv import DilateConvEncoder, SeqFeedForward
 from seqmodel.model.attention import SinusoidalPosition
-from seqmodel.task.task import LambdaLoss
-from seqmodel.task.mask import PositionMask
-from seqmodel.seq.mapseq import RandomRepeatSequence
-from seqmodel.seq.iterseq import StridedSequence, bed_from_file
-from seqmodel.seq.transform import INDEX_TO_BASE, Compose, one_hot_to_index
+from seqmodel.functional.mask import PositionMask
+from seqmodel.seqdata.mapseq import RandomRepeatSequence
+from seqmodel.seqdata.iterseq import StridedSequence, bed_from_file
+from seqmodel.functional.transform import INDEX_TO_BASE, Compose, one_hot_to_index
 from seqmodel.task.log import prediction_histograms, normalize_histogram, \
                             summarize, correct, accuracy_per_class
 

@@ -4,10 +4,9 @@ import unittest
 import torch
 import numpy.testing as npt
 
-from seqmodel.task.mask import *
-from seqmodel.seq.transform import one_hot, one_hot_to_index
-from seqmodel.task.task import GenericTask, LambdaLoss
-from seqmodel.seq.mapseq import RandomRepeatSequence, create_test_batch
+from seqmodel.functional.mask import *
+from seqmodel.functional.transform import one_hot, one_hot_to_index
+from seqmodel.seqdata.mapseq import RandomRepeatSequence, create_test_batch
 
 
 class Test_PositionMask(unittest.TestCase):

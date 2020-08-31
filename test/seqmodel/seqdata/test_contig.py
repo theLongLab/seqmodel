@@ -2,7 +2,7 @@ import sys
 sys.path.append('./src')
 import unittest
 
-from seqmodel.seq.contig import *
+from seqmodel.seqdata.contig import *
 
 
 class Test_IO(unittest.TestCase):

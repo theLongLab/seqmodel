@@ -7,7 +7,7 @@ import torch
 from pyfaidx import Fasta
 from torch.utils.data import IterableDataset
 
-from seqmodel.seq.transform import bioseq_to_index
+from seqmodel.functional.transform import bioseq_to_index
 
 
 def bed_from_file(bed_filename):
