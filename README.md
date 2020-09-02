@@ -77,12 +77,13 @@ Running on HPC
     ```
 - On HPC, add post-receive hook to checkout code after pushing.
     ```
-    cat >> hooks/post-receivetest << EOL
+    cat >> hooks/post-receive << EOL
     #!/bin/sh
     GIT_WORK_TREE={target_dir} git checkout -f
 
     EOL
     chmod +x hooks/post-receive
+    echo ref: refs/heads/main > HEAD
     ```
 - On local machine, add remote:
     ```

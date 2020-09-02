@@ -39,7 +39,7 @@ class StridedSequence(IterableDataset):
 
         # make table translating data index to genomic coordinate
         if include_intervals is None:  # use all sequences
-            include_intervals = self.seq.all_intervals()
+            include_intervals = self.seq.all_intervals
         self._build_index_to_coord_table(include_intervals)
 
     def _build_index_to_coord_table(self, intervals):

@@ -109,6 +109,7 @@ class SeqBERT(LightningModule):
                                 n_repeats=self.hparams.DEBUG_random_n_repeats,
                                 repeat_len=self.hparams.DEBUG_random_repeat_len)
         else:
+            # TODO: check that each StridedSequence instance has a different start offset
             valid_data = StridedSequence(self.seqdata, self.hparams.seq_len,
                                         include_intervals=self.valid_intervals)
         return torch.utils.data.DataLoader(valid_data, batch_size=self.hparams.batch_size,
