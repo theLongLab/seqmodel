@@ -49,7 +49,7 @@
 # Let's clone the repo: browse git@github.com:theLongLab/seqmodel.git
 mkdir seqmodel-example
 cd !$
-git clone -b feat/development/datasets git@github.com:theLongLab/seqmodel.git .
+git clone -b feat/development/datasets https://github.com/theLongLab/seqmodel.git .
     # clone branch to current directory '.'
 git log
     # pageup/pagedn to navigate, press q to quit
