@@ -24,7 +24,7 @@ def decompressed_name(filename):
 
 class DownloadableDataset():
 
-    _DEFAULT_CACHE_ROOT = '.seqmodel/.seqdata/.datasets/.cache'
+    _DEFAULT_CACHE_ROOT = '.cached_data/datasets'
 
     def __init__(self, url_root, cache_root=None, download=False, remove_compressed=False):
         self.url_root = url_root
@@ -79,8 +79,10 @@ class DownloadableDataset():
 class FastaSequence():
 
     def __init__(self, filename, as_raw=True):
+        # TODO currently transforms depend on as_raw=True to manipulate str, maybe change transforms?
         self.fasta = Fasta(filename, as_raw=as_raw)
 
+    @property
     def all_intervals(self):
         return SeqIntervals.from_cols(
             list(self.fasta.keys()),
@@ -134,11 +136,14 @@ class SeqIntervals():
     def end(self):
         return list(self.table.loc[:, self.seq_start_end_cols[2]])
 
-    def union(self, intervals):
+    def filter(self, *names, column_to_search):
         pass  #TODO
 
-    def intersect(self, intervals):
+    def union(self, *intervals):
         pass  #TODO
 
-    def remove(self, intervals):
+    def intersect(self, *intervals):
+        pass  #TODO
+
+    def remove(self, *intervals):
         pass  #TODO

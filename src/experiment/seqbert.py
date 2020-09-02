@@ -13,7 +13,9 @@ from seqmodel.model.conv import DilateConvEncoder, SeqFeedForward
 from seqmodel.model.attention import SinusoidalPosition
 from seqmodel.functional.mask import PositionMask
 from seqmodel.seqdata.mapseq import RandomRepeatSequence
-from seqmodel.seqdata.iterseq import StridedSequence, bed_from_file
+from seqmodel.seqdata.iterseq import StridedSequence
+from seqmodel.seqdata.dataset.datasets import FastaSequence, SeqIntervals
+from seqmodel.seqdata.dataset.ncbi import NCBISequence
 from seqmodel.functional.transform import INDEX_TO_BASE, Compose, one_hot_to_index
 from seqmodel.task.log import prediction_histograms, normalize_histogram, \
                             summarize, correct, accuracy_per_class
@@ -50,6 +52,20 @@ class SeqBERT(LightningModule):
         self.mask = PositionMask(mask_prop=self.hparams.mask_prop, random_prop=self.hparams.random_prop,
                                     keep_prop=self.hparams.keep_prop,)
 
+        if self.hparams.use_file:
+            self.seqdata = FastaSequence(self.hparams.seq_file)
+            self.train_intervals = SeqIntervals.from_bed_file(self.hparams.train_intervals)
+            self.valid_intervals = SeqIntervals.from_bed_file(self.hparams.valid_intervals)
+        else:
+            self.seqdata = NCBISequence.from_name(self.hparams.seq_name, self.hparams.data_cache_dir)
+            intervals = self.seqdata.all_intervals
+            self.train_intervals = intervals
+            self.valid_intervals = intervals
+            # TODO split into train and valid intervals by filtering
+            # self.valid_intervals = intervals.random_select(self.hparams.valid_prop)
+            # self.test_intervals = intervals.filter(self.hparams.test_intervals)
+            # self.train_intervals = intervals.remove(self.test_intervals, self.valid_intervals)
+
     def configure_optimizers(self):
         return torch.optim.Adam(chain(self.embedding.parameters(), self.transformer.parameters(),
                                 self.decoder.parameters()), lr=self.hparams.learning_rate)
@@ -82,10 +98,8 @@ class SeqBERT(LightningModule):
                                 n_repeats=self.hparams.DEBUG_random_n_repeats,
                                 repeat_len=self.hparams.DEBUG_random_repeat_len)
         else:
-            # train_data = MapSequence.from_file('data/ref_genome/chr22_excerpt_4m.fa', 500, remove_gaps=True)
-            intervals = bed_from_file(self.hparams.train_intervals)
-            train_data = StridedSequence.from_file(
-                self.hparams.seq_file, self.hparams.seq_len, include_intervals=intervals)
+            train_data = StridedSequence(self.seqdata, self.hparams.seq_len,
+                                        include_intervals=self.train_intervals)
         return torch.utils.data.DataLoader(train_data, batch_size=self.hparams.batch_size,
                                             num_workers=self.hparams.num_workers)
 
@@ -95,10 +109,8 @@ class SeqBERT(LightningModule):
                                 n_repeats=self.hparams.DEBUG_random_n_repeats,
                                 repeat_len=self.hparams.DEBUG_random_repeat_len)
         else:
-            # valid_data = MapSequence.from_file('data/ref_genome/chr22_excerpt_800k.fa', 500, remove_gaps=True)
-            intervals = bed_from_file(self.hparams.valid_intervals)
-            valid_data = StridedSequence.from_file(
-                self.hparams.seq_file, self.hparams.seq_len, include_intervals=intervals)
+            valid_data = StridedSequence(self.seqdata, self.hparams.seq_len,
+                                        include_intervals=self.valid_intervals)
         return torch.utils.data.DataLoader(valid_data, batch_size=self.hparams.batch_size,
                                             num_workers=self.hparams.num_workers)
 
@@ -147,9 +159,12 @@ class SeqBERT(LightningModule):
         parser.add_argument('--learning_rate', default=1e-3, type=float)
 
         #data params
-        parser.add_argument('--seq_file', default='data/ref_genome/p12/assembled_chr/GRCh38_p12_assembled_chr.fa', type=str)
+        parser.add_argument('--seq_name', default='GRCh38.p13', type=str)
+        parser.add_argument('--data_cache_dir', default='.cached_data/datasets', type=str)
+        parser.add_argument('--use_file', default=False, type=bool)
         parser.add_argument('--train_intervals', default='data/ref_genome/grch38-train.bed', type=str)
         parser.add_argument('--valid_intervals', default='data/ref_genome/grch38-1M-valid.bed', type=str)
+        parser.add_argument('--seq_file', default='data/ref_genome/p12/assembled_chr/GRCh38_p12_assembled_chr.fa', type=str)
         parser.add_argument('--seq_len', default=500, type=int)
         parser.add_argument('--DEBUG_use_random_data', default=False, type=bool)
         parser.add_argument('--DEBUG_random_repeat_len', default=1, type=int)

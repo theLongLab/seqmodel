@@ -23,7 +23,7 @@ class NCBISequence(DownloadableDataset, FastaSequence):
         #TODO generate automatically from database or web scrape
         # name, GenBank accession, md5 checksum of md5checksums.txt
             ['GRCh37.p13', 'GCA_000001405.14', ''], #TODO add md5 sums
-            ['GRCh38.p13', 'GCA_000001405.28', ''],
+            ['GRCh38.p13', 'GCA_000001405.28', 'b31b1174e6aa6213e08b94dc4d130779'],
             ['ASM308665v1', 'GCA_003086655.1', 'a39d8a1e20172b7dd0703c125ba27b19'],
         ])
     _FASTA_SUFFIX = '_genomic.fna.gz'
