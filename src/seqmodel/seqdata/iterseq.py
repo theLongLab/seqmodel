@@ -8,35 +8,16 @@ from pyfaidx import Fasta
 from torch.utils.data import IterableDataset
 
 from seqmodel.functional.transform import bioseq_to_index
-
-
-def bed_from_file(bed_filename):
-    return pd.read_csv(bed_filename, sep='\t', names=['chr', 'start', 'end'])
-
-def fasta_from_file(fasta_filename):
-    return Fasta(fasta_filename, as_raw=True)  # need as_raw=True to return strings
+from seqmodel.seqdata.dataset.datasets import FastaSequence
 
 
 class StridedSequence(IterableDataset):
 
-    def __init__(self, pyfaidx_fasta, seq_len, include_intervals=None,
+    def __init__(self, sequence_dataset, seq_len, include_intervals=None,
                 sequential=False, stride=0, start_offset=-1):
-        self.fasta = pyfaidx_fasta
+        self.seq = sequence_dataset
         self.seq_len = seq_len
         self._cutoff = self.seq_len - 1
-
-        if include_intervals is None:  # use entire fasta sequence
-            lengths = [len(seq) - self._cutoff for seq in self.fasta.values()]
-            self.keys = list(self.fasta.keys())
-            self.coord_offsets = [0] * len(self.fasta.keys())
-        else:  # make table of intervals
-            # if length is negative, remove interval (set length to 0)
-            lengths = [max(0, y - x - self._cutoff)
-                        for x, y in zip(include_intervals['start'], include_intervals['end'])]
-            self.keys = include_intervals['chr']
-            self.coord_offsets = list(include_intervals['start'])
-        self.n_seq = np.sum(lengths)
-        self.last_indexes = np.cumsum(lengths)
 
         if sequential:  # return sequences in order from beginning
             self.stride = 1
@@ -56,11 +37,25 @@ class StridedSequence(IterableDataset):
             else:
                 self.start_offset = start_offset
 
+        # make table translating data index to genomic coordinate
+        if include_intervals is None:  # use all sequences
+            include_intervals = self.seq.all_intervals()
+        self._build_index_to_coord_table(include_intervals)
+
+    def _build_index_to_coord_table(self, intervals):
+        # if length is negative, remove interval (set length to 0)
+        lengths = [max(0, y - x - self._cutoff)
+                    for x, y in zip(intervals.start, intervals.end)]
+        self.keys = intervals.names
+        self.coord_offsets = list(intervals.start)
+        self.n_seq = np.sum(lengths)
+        self.last_indexes = np.cumsum(lengths)
+
     @classmethod
     def from_file(cls, fasta_filename, seq_len, include_intervals=None,
                 sequential=False, stride=0, start_offset=-1):
-        fasta = fasta_from_file(fasta_filename)  # need as_raw=True to return strings
-        return cls(fasta, seq_len, include_intervals, sequential, stride, start_offset)
+        seq = FastaSequence(fasta_filename)  # need as_raw=True to return strings
+        return cls(seq, seq_len, include_intervals, sequential, stride, start_offset)
 
     def index_to_coord(self, i):
         index = (i * self.stride + self.start_offset) % self.n_seq
@@ -78,5 +73,5 @@ class StridedSequence(IterableDataset):
     def __iter__(self):
         for i in range(self.n_seq):
             key, coord = self.index_to_coord(i)
-            seq = self.fasta[key][coord:coord + self.seq_len]
-            yield bioseq_to_index(seq)
+            seq = self.seq.fasta[key][coord:coord + self.seq_len]
+            yield bioseq_to_index(str(seq))

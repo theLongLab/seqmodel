@@ -1,0 +1,44 @@
+# Assembly name:  ASM308665v1
+# Organism name:  Saccharomyces cerevisiae (baker's yeast)
+# Infraspecific name:  strain=BY4742
+# Taxid:          4932
+# BioSample:      SAMN08364553
+# BioProject:     PRJNA429985
+# Submitter:      Frasergen bioinfomatics
+# Date:           2018-05-03
+# Assembly type:  haploid
+# Release type:   major
+# Assembly level: Complete Genome
+# Genome representation: full
+# Assembly method: CANU v. 1.5
+# Expected final version: yes
+# Genome coverage: 320.0x
+# Sequencing technology: PacBio
+# GenBank assembly accession: GCA_003086655.1
+#
+## Assembly-Units:
+## GenBank Unit Accession	RefSeq Unit Accession	Assembly-Unit name
+## GCA_003086665.1		Primary Assembly
+#
+# Ordered by chromosome/plasmid; the chromosomes/plasmids are followed by
+# unlocalized scaffolds.
+# Unplaced scaffolds are listed at the end.
+# RefSeq is equal or derived from GenBank object.
+#
+# Sequence-Name	Sequence-Role	Assigned-Molecule	Assigned-Molecule-Location/Type	GenBank-Accn	Relationship	RefSeq-Accn	Assembly-Unit	Sequence-Length	UCSC-style-name
+I	assembled-molecule	I	Chromosome	CP026301.1	<>	na	Primary Assembly	230490	na
+II	assembled-molecule	II	Chromosome	CP026296.1	<>	na	Primary Assembly	822297	na
+III	assembled-molecule	III	Chromosome	CP026297.1	<>	na	Primary Assembly	333764	na
+IV	assembled-molecule	IV	Chromosome	CP026298.1	<>	na	Primary Assembly	1545606	na
+V	assembled-molecule	V	Chromosome	CP026299.1	<>	na	Primary Assembly	582048	na
+VI	assembled-molecule	VI	Chromosome	CP026302.1	<>	na	Primary Assembly	270887	na
+VII	assembled-molecule	VII	Chromosome	CP026294.1	<>	na	Primary Assembly	1091388	na
+VIII	assembled-molecule	VIII	Chromosome	CP026287.1	<>	na	Primary Assembly	576806	na
+IX	assembled-molecule	IX	Chromosome	CP026295.1	<>	na	Primary Assembly	440032	na
+X	assembled-molecule	X	Chromosome	CP026288.1	<>	na	Primary Assembly	745649	na
+XI	assembled-molecule	XI	Chromosome	CP026289.1	<>	na	Primary Assembly	666876	na
+XII	assembled-molecule	XII	Chromosome	CP026300.1	<>	na	Primary Assembly	1104511	na
+XIII	assembled-molecule	XIII	Chromosome	CP026291.1	<>	na	Primary Assembly	930523	na
+XIV	assembled-molecule	XIV	Chromosome	CP026293.1	<>	na	Primary Assembly	784585	na
+XV	assembled-molecule	XV	Chromosome	CP026303.1	<>	na	Primary Assembly	1091321	na
+XVI	assembled-molecule	XVI	Chromosome	CP026290.1	<>	na	Primary Assembly	948685	na
