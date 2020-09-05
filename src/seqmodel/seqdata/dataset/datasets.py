@@ -101,49 +101,146 @@ class SeqIntervals():
 
     _DEFAULT_COL_NAMES = ['names', 'start', 'end']
 
-    def __init__(self, annotation_table, seq_start_end_cols=[0, 1, 2]):
+    """
+    Defines start and endpoints within a set of named sequences.
+    Intervals must be unique (by name) and non-overlapping.
+
+    seqname_start_end_index: list of int indices or str names of columns relevant
+            SeqIntervals, must be in order [seqname, start, end]
+    """
+    def __init__(self, annotation_table, seqname_start_end_index=[0, 1, 2], nonzero=True):
         self.table = annotation_table
-        self.seq_start_end_cols = [None] * 3
-        for i, col in enumerate(seq_start_end_cols):
-            if type(i) is int:
-                self.seq_start_end_cols[i] = annotation_table.columns[col]
+        self._index = pd.Index([])
+        for i, col in enumerate(seqname_start_end_index):
+            if type(col) is int:
+                self._index = self._index.insert(i, annotation_table.columns[col])
             else:
                 assert col in annotation_table.columns
-                self.seq_start_end_cols[i] = col
+                self._index = self._index.insert(i, col)
+        if nonzero:
+            self.table = self._filter_by_len()  # get rid of 0 or negative length intervals
 
     @classmethod
-    def from_cols(cls, seqs, starts, ends):
+    def from_cols(cls, seqs, starts, ends, nonzero=True):
         data =  {cls._DEFAULT_COL_NAMES[0]: seqs,
                 cls._DEFAULT_COL_NAMES[1]: starts,
                 cls._DEFAULT_COL_NAMES[2]: ends}
-        return cls(pd.DataFrame(data=data, columns=cls._DEFAULT_COL_NAMES))
+        return cls(pd.DataFrame(data=data, columns=cls._DEFAULT_COL_NAMES), nonzero=nonzero)
 
     @classmethod
-    def from_bed_file(cls, filename, sep='\t'):
+    def from_bed_file(cls, filename, sep='\t', nonzero=True):
         with open(filename, 'r') as file:
             table = pd.read_csv(file, sep=sep, names=cls._DEFAULT_COL_NAMES)
-        return cls(table)
+        return cls(table, nonzero=nonzero)
 
     @property
-    def names(self):
-        return list(self.table.loc[:, self.seq_start_end_cols[0]])
+    def seqnames(self):
+        return self.table[self._index[0]]
 
     @property
     def start(self):
-        return list(self.table.loc[:, self.seq_start_end_cols[1]])
+        return self.table.loc[:, self._index[1]]
 
     @property
     def end(self):
-        return list(self.table.loc[:, self.seq_start_end_cols[2]])
+        return self.table.loc[:, self._index[2]]
 
-    def filter(self, *names, column_to_search):
+    @property
+    def length(self):
+        return self.end - self.start
+    
+    def __len__(self):
+        return len(self.table)
+
+    def __repr__(self):
+        return repr(self.table)
+
+    def __str__(self):
+        return repr(self.table)
+
+    def clone(self, new_table=None, deep_copy=False):
+        table = new_table
+        if new_table is None:
+            table = self.table
+        if deep_copy:
+            table = table.copy()
+        return SeqIntervals(table, self._index, nonzero=False)
+
+    def filter(self, *loc_labels, col_to_search=None):
+        if col_to_search is None:
+            col_to_search = self.seqnames
+        return self.clone(self.table[col_to_search.isin(loc_labels)], False)
+
+    def _filter_by_len(self, min_len=1, max_len=None):
+        if max_len is None:
+            return self.table.loc[self.length >= min_len]
+        else:  # use element-wise and `&`
+            return self.table.loc[(self.length >= min_len) & (self.length <= max_len)]
+
+    # max_len is inclusive
+    def filter_by_len(self, min_len=1, max_len=None):
+        return self.clone(self._filter_by_len(min_len, max_len), False)
+
+    # warning: this is an in place operation!
+    def _merge_overlaps(self, min_allowable_gap):
+        self.table = self.table.sort_values([self._index[0], self._index[1]])
+        distance_to_next_interval = self.start[1:].values - self.end[:-1].values
+        is_same_sequence = self.seqnames[1:].values == self.seqnames[:-1].values
+        # merge_candidates guaranteed to contain the first of multiple overlapping positions
+        # but not necessarily all of the subsequent positions: counter example is
+        # 0-10, 1-2, 3-4, merge_candidates will be [True, False] even though 3-4 overlaps 0-10
+        # this gives a starting point for iterating over intervals sequentially, which is slow
+        merge_candidates = (distance_to_next_interval < min_allowable_gap) & is_same_sequence
+
+        rows_to_remove = []
+        end_col = self.table.columns.get_loc(self._index[2])
+        for i in np.nonzero(merge_candidates)[0]:
+            j = i + 1
+            # check if merge_candidates are between the same named sequence
+            while j < len(self.table) and is_same_sequence[j - 1] \
+                    and self.start.iloc[j] - self.end.iloc[i] < min_allowable_gap:
+                # if true, merge the intervals and the next ones
+                # until the distance to next is greater than min_allowable_gap
+                # extend first interval
+                # note: cannot update array values using chained indexing, hence use `.loc`
+                # see https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+                self.table.iloc[i, end_col] = max(self.end.iloc[i], self.end.iloc[j])
+                rows_to_remove.append(j)  # remove subsequent intervals
+                j += 1
+        self.table = self.table.drop(self.table.iloc[rows_to_remove].index)
+        return self
+
+    # reimplement this for labelled intervals
+    def columns_match(self, interval):
+        return (self.table.columns == interval.table.columns).all() \
+                and (self._index == interval._index).all()
+
+    def _append_tables(self, *intervals):
+        new_table = self.table
+        for i in intervals:
+            if self.columns_match(i):
+                new_table = new_table.append(i.table)
+            else:
+                raise ValueError('SeqInterval object columns do not match ', str(interval))
+        return new_table
+
+    """
+    Set union (addition) of current SeqIntervals object with other SeqIntervals
+
+        in_place: default `False` creates a new copy of underlying table data.
+            If `in_place=True`, modify calling object's table.
+    """
+    def union(self, *intervals, min_allowable_gap=1, in_place=False):
+        table = self._append_tables(*intervals)
+        if in_place:
+            self.table = table
+            return self._merge_overlaps(min_allowable_gap)
+        else:
+            interval_obj = self.clone(table, True)
+            return interval_obj._merge_overlaps(min_allowable_gap)
+
+    def intersect(self, *intervals, in_place=False):
         pass  #TODO
 
-    def union(self, *intervals):
-        pass  #TODO
-
-    def intersect(self, *intervals):
-        pass  #TODO
-
-    def remove(self, *intervals):
+    def remove(self, *intervals, in_place=False):
         pass  #TODO

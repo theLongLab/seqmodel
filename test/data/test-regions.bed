@@ -1,0 +1,14 @@
+gap50	0	100
+gap50	150	250
+gap50	300	400
+adjacent100	100	200
+adjacent100	200	300
+zero	100	100
+zero	120	120
+overlap75	150	225
+overlap75	100	175
+overlap75	200	275
+contained20	0	300
+contained20	50	250
+contained20	180	200
+contained20	100	120

@@ -62,8 +62,8 @@ class SeqBERT(LightningModule):
             self.train_intervals = intervals
             self.valid_intervals = intervals
             # TODO split into train and valid intervals by filtering
-            # self.valid_intervals = intervals.random_select(self.hparams.valid_prop)
-            # self.test_intervals = intervals.filter(self.hparams.test_intervals)
+            # self.valid_intervals = intervals.random_select(seq_len, self.hparams.valid_prop)
+            # self.test_intervals = intervals.filter(['chr7', 'chr8'])
             # self.train_intervals = intervals.remove(self.test_intervals, self.valid_intervals)
 
     def configure_optimizers(self):

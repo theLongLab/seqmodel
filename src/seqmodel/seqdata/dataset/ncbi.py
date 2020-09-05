@@ -131,8 +131,8 @@ class NCBISequence(DownloadableDataset, FastaSequence):
 
     def generate_faidx_from_assembly_report(self):
         report = self.get_report_table()
-        genbank_accn = report[_REPORT_HEADER[4]]
-        seq_len = report[_REPORT_HEADER[8]]
+        genbank_accn = report[self._REPORT_HEADER[4]]
+        seq_len = report[self._REPORT_HEADER[8]]
         byte_index = 0
         fasta_index = []
         with open(self.fasta_file, 'r') as file:
@@ -165,14 +165,14 @@ class NCBISequence(DownloadableDataset, FastaSequence):
         return super().retrieve_or_download(filename, md5, decompress=decompress)
 
     def translate_accn(name_or_accn, accn_type=None):
-        ACCN_HEADERS = [_REPORT_HEADER[x] for x in [0, 4, 6, 9]]
+        ACCN_HEADERS = [self._REPORT_HEADER[x] for x in [0, 4, 6, 9]]
         if accn_type is None:
             coords = np.where(self.report_table == name_or_accn)
         else:
             assert accn_type in ACCN_HEADERS
             coords = np.where(self.report_table[accn_type] == name_or_accn)
         if len(coords[0] > 1):
-            warnings.warn("name_or_accn is not unique, returning first record retrieved by \
+            raise ValueError("name_or_accn is not unique, returning first record retrieved by \
                     numpy.where(). This may be resolved by specifying accn_type as one of \
                     'Sequence-Name', 'GenBank-Accn', 'RefSeq-Accn', or 'UCSC-style-name'. ")
         return tuple(self.report_table.iloc[coords[0][0]][ACCN_HEADERS])

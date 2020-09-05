@@ -46,7 +46,7 @@ class StridedSequence(IterableDataset):
         # if length is negative, remove interval (set length to 0)
         lengths = [max(0, y - x - self._cutoff)
                     for x, y in zip(intervals.start, intervals.end)]
-        self.keys = intervals.names
+        self.keys = intervals.seqnames
         self.coord_offsets = list(intervals.start)
         self.n_seq = np.sum(lengths)
         self.last_indexes = np.cumsum(lengths)
