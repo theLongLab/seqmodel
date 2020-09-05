@@ -8,10 +8,10 @@ from pyfaidx import Fasta
 from torch.utils.data import IterableDataset
 
 from seqmodel.functional.transform import bioseq_to_index
-from seqmodel.seqdata.dataset.datasets import FastaSequence
+from seqmodel.seqdata.dataset.datasets import FastaDataset
 
 
-class StridedSequence(IterableDataset):
+class StridedSequenceLoader(IterableDataset):
 
     def __init__(self, sequence_dataset, seq_len, include_intervals=None,
                 sequential=False, stride=0, start_offset=-1):
@@ -54,7 +54,7 @@ class StridedSequence(IterableDataset):
     @classmethod
     def from_file(cls, fasta_filename, seq_len, include_intervals=None,
                 sequential=False, stride=0, start_offset=-1):
-        seq = FastaSequence(fasta_filename)  # need as_raw=True to return strings
+        seq = FastaDataset(fasta_filename)  # need as_raw=True to return strings
         return cls(seq, seq_len, include_intervals, sequential, stride, start_offset)
 
     def index_to_coord(self, i):

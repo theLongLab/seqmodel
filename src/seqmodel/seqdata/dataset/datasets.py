@@ -76,7 +76,7 @@ class DownloadableDataset():
                 raise FileNotFoundError('Unable to retrieve or download ' + filename)
 
 
-class FastaSequence():
+class FastaDataset():
 
     def __init__(self, filename, as_raw=True):
         # TODO currently transforms depend on as_raw=True to manipulate str, maybe change transforms?

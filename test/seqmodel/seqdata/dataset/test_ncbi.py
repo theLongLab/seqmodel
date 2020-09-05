@@ -8,7 +8,7 @@ from seqmodel.seqdata.dataset.ncbi import *
 from seqmodel.seqdata.dataset.datasets import decompressed_name
 
 
-class Test_NCBISequence(unittest.TestCase):
+class Test_NCBIDataset(unittest.TestCase):
 
     _DO_DOWNLOAD = False
 
@@ -16,13 +16,13 @@ class Test_NCBISequence(unittest.TestCase):
         self.cache_root = 'test/data/seqdata/dataset/.cache'
         self.test_name = 'ASM308665v1'  # use yeast sequence, as it is short
         self.test_accn = 'GCA_003086655.1'
-        self.seq = NCBISequence.from_name(self.test_name, self.cache_root,
+        self.seq = NCBIDataset.from_name(self.test_name, self.cache_root,
                                     download=self._DO_DOWNLOAD)
 
     def del_if_exists(self, *paths):
         for path in paths:
             fullpath = os.path.abspath(os.path.join(
-                self.cache_root, 'NCBISequence', self.test_accn + '_' + self.test_name, path))
+                self.cache_root, 'NCBIDataset', self.test_accn + '_' + self.test_name, path))
             if os.path.exists(fullpath):
                 if os.path.isfile(fullpath):
                     os.remove(fullpath)
@@ -30,10 +30,10 @@ class Test_NCBISequence(unittest.TestCase):
                     os.rmdir(fullpath)
 
     def test_from_name(self):
-        seq = NCBISequence.from_name(self.test_accn, self.cache_root, download=False)
+        seq = NCBIDataset.from_name(self.test_accn, self.cache_root, download=False)
         self.assertEqual(self.seq.root_name, self.test_accn + '_' + self.test_name)
         self.assertEqual(self.seq.cache_root, os.path.join(
-            self.cache_root, 'NCBISequence', self.test_accn + '_' + self.test_name))
+            self.cache_root, 'NCBIDataset', self.test_accn + '_' + self.test_name))
         self.assertEqual(self.seq.url_root, seq.url_root)
 
     def test_retrieve_or_download(self):
@@ -68,7 +68,7 @@ class Test_NCBISequence(unittest.TestCase):
 
     def test_fasta(self):
         file = self.seq.fasta_file
-        self.assertEqual(file, os.path.join(self.cache_root, 'NCBISequence',
+        self.assertEqual(file, os.path.join(self.cache_root, 'NCBIDataset',
                 self.test_accn + '_' + self.test_name,
                 self.test_accn + '_' + self.test_name + '_genomic.fna'))
         fasta = self.seq.fasta
@@ -89,5 +89,5 @@ class Test_NCBISequence(unittest.TestCase):
 if __name__ == '__main__':
     # download external data only if this file is run directly
     print('Downloading data for tests...')
-    Test_NCBISequence._DO_DOWNLOAD = True
+    Test_NCBIDataset._DO_DOWNLOAD = True
     unittest.main()

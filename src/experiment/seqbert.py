@@ -13,9 +13,9 @@ from seqmodel.model.conv import DilateConvEncoder, SeqFeedForward
 from seqmodel.model.attention import SinusoidalPosition
 from seqmodel.functional.mask import PositionMask
 from seqmodel.seqdata.mapseq import RandomRepeatSequence
-from seqmodel.seqdata.iterseq import StridedSequence
-from seqmodel.seqdata.dataset.datasets import FastaSequence, SeqIntervals
-from seqmodel.seqdata.dataset.ncbi import NCBISequence
+from seqmodel.seqdata.iterseq import StridedSequenceLoader
+from seqmodel.seqdata.dataset.datasets import FastaDataset, SeqIntervals
+from seqmodel.seqdata.dataset.ncbi import NCBIDataset
 from seqmodel.functional.transform import INDEX_TO_BASE, Compose, one_hot_to_index
 from seqmodel.task.log import prediction_histograms, normalize_histogram, \
                             summarize, correct, accuracy_per_class
@@ -53,11 +53,11 @@ class SeqBERT(LightningModule):
                                     keep_prop=self.hparams.keep_prop,)
 
         if self.hparams.use_file:
-            self.seqdata = FastaSequence(self.hparams.seq_file)
+            self.seqdata = FastaDataset(self.hparams.seq_file)
             self.train_intervals = SeqIntervals.from_bed_file(self.hparams.train_intervals)
             self.valid_intervals = SeqIntervals.from_bed_file(self.hparams.valid_intervals)
         else:
-            self.seqdata = NCBISequence.from_name(self.hparams.seq_name, self.hparams.data_cache_dir)
+            self.seqdata = NCBIDataset.from_name(self.hparams.seq_name, self.hparams.data_cache_dir)
             intervals = self.seqdata.all_intervals
             self.train_intervals = intervals
             self.valid_intervals = intervals
@@ -98,7 +98,7 @@ class SeqBERT(LightningModule):
                                 n_repeats=self.hparams.DEBUG_random_n_repeats,
                                 repeat_len=self.hparams.DEBUG_random_repeat_len)
         else:
-            train_data = StridedSequence(self.seqdata, self.hparams.seq_len,
+            train_data = StridedSequenceLoader(self.seqdata, self.hparams.seq_len,
                                         include_intervals=self.train_intervals)
         return torch.utils.data.DataLoader(train_data, batch_size=self.hparams.batch_size,
                                             num_workers=self.hparams.num_workers)
@@ -109,8 +109,8 @@ class SeqBERT(LightningModule):
                                 n_repeats=self.hparams.DEBUG_random_n_repeats,
                                 repeat_len=self.hparams.DEBUG_random_repeat_len)
         else:
-            # TODO: check that each StridedSequence instance has a different start offset
-            valid_data = StridedSequence(self.seqdata, self.hparams.seq_len,
+            # TODO: check that each StridedSequenceLoader instance has a different start offset
+            valid_data = StridedSequenceLoader(self.seqdata, self.hparams.seq_len,
                                         include_intervals=self.valid_intervals)
         return torch.utils.data.DataLoader(valid_data, batch_size=self.hparams.batch_size,
                                             num_workers=self.hparams.num_workers)

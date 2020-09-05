@@ -9,7 +9,7 @@ from pyfaidx import Fasta
 from seqmodel.seqdata.dataset.datasets import *
 
 
-class NCBISequence(DownloadableDataset, FastaSequence):
+class NCBIDataset(DownloadableDataset, FastaDataset):
 
     """
     Download reference assemblies from Genome Research Consortium, NCBI.
@@ -46,7 +46,7 @@ class NCBISequence(DownloadableDataset, FastaSequence):
 
     def __init__(self, url_root, checksumfile_md5,
                 cache_root=None, download=False, remove_compressed=False):
-        # note: does not call super().__init__ for FastaSequence since that is a wrapper
+        # note: does not call super().__init__ for FastaDataset since that is a wrapper
         # for Fasta objects, objects need to be handled differently in DownloadableDataset
         super().__init__(url_root, cache_root, download, remove_compressed)
         self.checksumfile_md5 = checksumfile_md5
