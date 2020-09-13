@@ -20,10 +20,11 @@ def fasta_from_file(fasta_filename):
 class StridedSequence(IterableDataset):
 
     def __init__(self, pyfaidx_fasta, seq_len, include_intervals=None,
-                sequential=False, stride=0, start_offset=-1):
+                sequential=False, stride=None, start_offset=None, transforms=bioseq_to_index):
         self.fasta = pyfaidx_fasta
         self.seq_len = seq_len
         self._cutoff = self.seq_len - 1
+        self.transforms = transforms
 
         if include_intervals is None:  # use entire fasta sequence
             lengths = [len(seq) - self._cutoff for seq in self.fasta.values()]
@@ -55,10 +56,11 @@ class StridedSequence(IterableDataset):
                 self.start_offset = torch.randint(self.n_seq, [1]).item()
             else:
                 self.start_offset = start_offset
+        self.start_offset = 0
 
     @classmethod
     def from_file(cls, fasta_filename, seq_len, include_intervals=None,
-                sequential=False, stride=0, start_offset=-1):
+                sequential=False, stride=None, start_offset=None):
         fasta = fasta_from_file(fasta_filename)  # need as_raw=True to return strings
         return cls(fasta, seq_len, include_intervals, sequential, stride, start_offset)
 
@@ -79,4 +81,4 @@ class StridedSequence(IterableDataset):
         for i in range(self.n_seq):
             key, coord = self.index_to_coord(i)
             seq = self.fasta[key][coord:coord + self.seq_len]
-            yield bioseq_to_index(seq)
+            yield self.transforms(seq), key, coord

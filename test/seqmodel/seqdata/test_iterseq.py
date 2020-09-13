@@ -18,14 +18,14 @@ class Test_StridedSeq(unittest.TestCase):
 
     def test_StridedSequence(self):
         dataset = StridedSequence(self.fasta, 3, sequential=True)
-        data = [x for x in dataset]
+        data = [x[0] for x in dataset]
         self.assertEqual(len(data), 50 - 2 - 2)
         npt.assert_array_equal(data[0], self.seqs[0][:3])
         npt.assert_array_equal(data[1], self.seqs[0][1:4])
         npt.assert_array_equal(data[-1], self.seqs[1][-3:])
 
         dataset = StridedSequence(self.fasta, 3, stride=3, start_offset=1)
-        data = [x for x in dataset]
+        data = [x[0] for x in dataset]
         npt.assert_array_equal(data[0], self.seqs[0][1:4])
         npt.assert_array_equal(data[1], self.seqs[0][4:7])
         npt.assert_array_equal(data[-1], self.seqs[1][-4:-1])
@@ -37,7 +37,7 @@ class Test_StridedSeq(unittest.TestCase):
             'end': [30],
         }
         dataset = StridedSequence(self.fasta, 3, sequential=True, include_intervals=intervals)
-        data = [x for x in dataset]
+        data = [x[0] for x in dataset]
         npt.assert_array_equal(data[0], self.seqs[0][:3])
         npt.assert_array_equal(data[1], self.seqs[0][1:4])
         npt.assert_array_equal(data[-1], self.seqs[0][-3:])
@@ -48,7 +48,7 @@ class Test_StridedSeq(unittest.TestCase):
             'end': [9, 18, 5, 16, 30],
         }
         dataset = StridedSequence(self.fasta, 3, sequential=True, include_intervals=intervals)
-        data = [x for x in dataset]
+        data = [x[0] for x in dataset]
         self.assertEqual(len(data), 11)
         npt.assert_array_equal(data[0], self.seqs[1][5:8])
         npt.assert_array_equal(data[1], self.seqs[1][6:9])
@@ -60,7 +60,7 @@ class Test_StridedSeq(unittest.TestCase):
                                 names=['chr', 'start', 'end'], sep='\t')
         dataset = StridedSequence.from_file('data/ref_genome/p12/assembled_chr/GRCh38_p12_assembled_chr.fa',
                                 100, sequential=True, include_intervals=intervals)
-        for i in dataset:
+        for i, _, _ in dataset:
             self.assertFalse(np.any((i == 4).numpy()))
             break
 

@@ -13,7 +13,7 @@ from seqmodel.model.conv import DilateConvEncoder, SeqFeedForward
 from seqmodel.model.attention import SinusoidalPosition
 from seqmodel.functional.mask import PositionMask
 from seqmodel.seqdata.mapseq import RandomRepeatSequence
-from seqmodel.seqdata.iterseq import StridedSequence, bed_from_file
+from seqmodel.seqdata.iterseq import StridedSequence, bed_from_file,fasta_from_file
 from seqmodel.functional.transform import INDEX_TO_BASE, Compose, one_hot_to_index
 from seqmodel.task.log import prediction_histograms, normalize_histogram, \
                             summarize, correct, accuracy_per_class
@@ -50,11 +50,19 @@ class SeqBERT(LightningModule):
         self.mask = PositionMask(mask_prop=self.hparams.mask_prop, random_prop=self.hparams.random_prop,
                                     keep_prop=self.hparams.keep_prop,)
 
+    # put into torch.utils.data.DataLoader
+    def worker_init_fn(self, worker_id):
+        worker = torch.utils.data.get_worker_info()
+        dataset = worker.dataset
+        dataset.fasta = fasta_from_file(self.hparams.seq_file)
+        dataset.start_offset = torch.randint(dataset.n_seq, [1]).item()
+
     def configure_optimizers(self):
         return torch.optim.Adam(chain(self.embedding.parameters(), self.transformer.parameters(),
                                 self.decoder.parameters()), lr=self.hparams.learning_rate)
 
-    def forward(self, x):
+    def forward(self, batch):
+        x, seqname, coord = batch
         # swap dimensions from (batch, seq, channel) to (seq, batch, channel)
         x_1 = self.embedding(x).permute(1, 0, 2)
         z = self.transformer(x_1)
@@ -62,19 +70,21 @@ class SeqBERT(LightningModule):
         y = self.decoder(z.permute(1, 2, 0))
         return y
 
-    def masked_forward(self, batch):
+    def masked_forward(self, x_in):
         # swap dimensions from (batch, seq, channel) to (seq, batch, channel)
-        x, mask = self.mask.attn_mask(batch, mask_value=True, mask_fill=False)
+        x, mask = self.mask.attn_mask(x_in, mask_value=True, mask_fill=False)
         latent = self.transformer(self.embedding(x).permute(1, 0, 2), src_key_padding_mask=mask)
         # swap dimensions from (seq, batch, channel) to (batch, channels, seq_len)
         predicted = self.decoder(latent.permute(1, 2, 0))
-        loss = self.loss_fn(*self.mask.select(predicted, batch))
+        loss = self.loss_fn(*self.mask.select(predicted, x_in))
         return loss, predicted, latent, x
 
     def training_step(self, batch, batch_idx):
-        loss, predicted, _, _ = self.masked_forward(batch)
-        return {'loss': loss,
-                'log': {'train_loss': loss}}
+        x, seqname, coord = batch
+        loss, predicted, _, _ = self.masked_forward(x)
+        return {'loss': loss, #'seqname': seqname[-1], 'coord': coord[-1],
+                'log': {'train_loss': loss,} #'seqname': seqname[-1], 'coord': coord[-1],},
+                }
 
     def train_dataloader(self):
         if self.hparams.DEBUG_use_random_data:
@@ -87,7 +97,7 @@ class SeqBERT(LightningModule):
             train_data = StridedSequence.from_file(
                 self.hparams.seq_file, self.hparams.seq_len, include_intervals=intervals)
         return torch.utils.data.DataLoader(train_data, batch_size=self.hparams.batch_size,
-                                            num_workers=self.hparams.num_workers)
+                        num_workers=self.hparams.num_workers, worker_init_fn=self.worker_init_fn)
 
     def val_dataloader(self):
         if self.hparams.DEBUG_use_random_data:
@@ -100,13 +110,15 @@ class SeqBERT(LightningModule):
             valid_data = StridedSequence.from_file(
                 self.hparams.seq_file, self.hparams.seq_len, include_intervals=intervals)
         return torch.utils.data.DataLoader(valid_data, batch_size=self.hparams.batch_size,
-                                            num_workers=self.hparams.num_workers)
+                        num_workers=self.hparams.num_workers, worker_init_fn=self.worker_init_fn)
 
     def validation_step(self, batch, batch_idx):
-        loss, predicted, _, _ = self.masked_forward(batch)
-        str_train_sample = summarize(self.mask.mask_val + 4, batch, correct(predicted, batch),
+        x_in, seqname, coord = batch
+        loss, predicted, _, _ = self.masked_forward(x_in)
+        
+        str_train_sample = summarize(self.mask.mask_val + 4, x_in, correct(predicted, x_in),
                 predicted.permute(1, 0, 2), index_symbols=INDEX_TO_BASE + [' ', '_', '?', '='])
-        hist = prediction_histograms(predicted.detach().cpu(), batch.detach().cpu(), n_bins=3)
+        hist = prediction_histograms(predicted.detach().cpu(), x_in.detach().cpu(), n_bins=3)
         acc = normalize_histogram(hist)
         acc_numbers = accuracy_per_class(hist)
         str_acc = summarize(acc, col_labels=INDEX_TO_BASE, normalize_fn=None)
@@ -142,7 +154,7 @@ class SeqBERT(LightningModule):
         parser.add_argument('--keep_prop', default=0.05, type=float)
         parser.add_argument('--mask_prop', default=0.08, type=float)
         parser.add_argument('--random_prop', default=0.02, type=float)
-        parser.add_argument('--num_workers', default=4, type=int)
+        parser.add_argument('--num_workers', default=0, type=int)
         parser.add_argument('--batch_size', default=64, type=int)
         parser.add_argument('--learning_rate', default=1e-3, type=float)
 
