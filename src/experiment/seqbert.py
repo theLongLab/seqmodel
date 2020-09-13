@@ -57,8 +57,7 @@ class SeqBERT(LightningModule):
             if self.hparams.train_intervals is not None:
                 intervals = bed_from_file(self.hparams.train_intervals)
             train_data = StridedSequence(
-                self.hparams.seq_file, self.hparams.seq_len, include_intervals=intervals, sequential=False
-                , start_offset=0, stride=0)
+                self.hparams.seq_file, self.hparams.seq_len, include_intervals=intervals, sequential=False)
         return train_data.get_data_loader(self.hparams.batch_size, self.hparams.num_workers)
 
     def val_dataloader(self):
@@ -72,8 +71,7 @@ class SeqBERT(LightningModule):
             if self.hparams.valid_intervals is not None:
                 intervals = bed_from_file(self.hparams.valid_intervals)
             valid_data = StridedSequence(
-                self.hparams.seq_file, self.hparams.seq_len, include_intervals=intervals, sequential=True
-                , start_offset=0, stride=0)
+                self.hparams.seq_file, self.hparams.seq_len, include_intervals=intervals, sequential=True)
         return valid_data.get_data_loader(self.hparams.batch_size, self.hparams.num_workers)
 
     def forward(self, batch):
