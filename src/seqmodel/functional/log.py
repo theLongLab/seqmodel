@@ -55,7 +55,7 @@ def normalize_histogram(histogram, weights=None):
         weights = histogram
     return (histogram.permute(2, 0, 1) / (torch.sum(weights, dim=2) + EPSILON)).permute(1, 2, 0)
 
-def accuracy_per_class(histogram, threshold_prob=0.):
+def accuracy_per_class(histogram, threshold_prob=0.5):
     n_class = histogram.shape[1]
     n_bins = histogram.shape[2]
     min_prob = 1. / n_class

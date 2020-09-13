@@ -13,8 +13,8 @@ from seqmodel.seqdata.iterseq import *
 class Test_StridedSeq(unittest.TestCase):
 
     def setUp(self):
-        self.fasta = fasta_from_file('test/data/short.fa')
-        self.seqs = [bioseq_to_index(x[:len(x)]) for x in self.fasta.values()]
+        self.fasta = 'test/data/short.fa'
+        self.seqs = [bioseq_to_index(x[:len(x)]) for x in fasta_from_file(self.fasta).values()]
 
     def test_StridedSequence(self):
         dataset = StridedSequence(self.fasta, 3, sequential=True)
@@ -32,7 +32,7 @@ class Test_StridedSeq(unittest.TestCase):
 
     def test_StridedSequence_intervals(self):
         intervals = {
-            'chr': ['seq1____'],
+            'seqname': ['seq1____'],
             'start': [0],
             'end': [30],
         }
@@ -43,7 +43,7 @@ class Test_StridedSeq(unittest.TestCase):
         npt.assert_array_equal(data[-1], self.seqs[0][-3:])
 
         intervals = {
-            'chr': ['seq2___', 'seq2___', 'seq1____', 'seq1____', 'seq1____'],
+            'seqname': ['seq2___', 'seq2___', 'seq1____', 'seq1____', 'seq1____'],
             'start': [5, 17, 2, 15, 20],
             'end': [9, 18, 5, 16, 30],
         }
@@ -57,8 +57,8 @@ class Test_StridedSeq(unittest.TestCase):
         npt.assert_array_equal(data[-1], self.seqs[0][-3:])
 
         intervals = pd.read_csv('data/ref_genome/grch38_contig_intervals.bed',
-                                names=['chr', 'start', 'end'], sep='\t')
-        dataset = StridedSequence.from_file('data/ref_genome/p12/assembled_chr/GRCh38_p12_assembled_chr.fa',
+                                names=['seqname', 'start', 'end'], sep='\t')
+        dataset = StridedSequence('data/ref_genome/p12/assembled_chr/GRCh38_p12_assembled_chr.fa',
                                 100, sequential=True, include_intervals=intervals)
         for i, _, _ in dataset:
             self.assertFalse(np.any((i == 4).numpy()))

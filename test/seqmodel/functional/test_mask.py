@@ -92,7 +92,7 @@ class Test_PositionMask(unittest.TestCase):
 
         self.mask.mask_val = torch.zeros_like(self.x)
         self.mask.mask_val[0, 0] = PositionMask._MASK_INDEX
-        x = self.mask.mask_fill(one_hot(self.x))
+        x = self.mask.mask_fill(one_hot(self.x), 0)
         npt.assert_array_equal(x[0, :, 0], [0, 0, 0, 0])
         npt.assert_array_equal(x[1:, :, 1:], one_hot(self.x)[1:, :, 1:])
 
@@ -114,7 +114,7 @@ class Test_PositionMask(unittest.TestCase):
         npt.assert_array_equal(mask, torch.zeros_like(self.x))
         self.mask.set_mask_props(mask_prop=1.)
         x, mask = self.mask.attn_mask(self.x, mask_fill=True)
-        npt.assert_array_equal(x, torch.zeros_like(self.x))
+        npt.assert_array_equal(x, torch.ones_like(self.x) * 4)
         npt.assert_array_equal(mask, float('-inf'))
         self.mask.set_mask_props(random_prop=1.)
         x, mask = self.mask.attn_mask(self.x)

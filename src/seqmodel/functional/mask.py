@@ -28,8 +28,9 @@ class PositionMask():
     _RANDOM_INDEX = 2
     _KEEP_INDEX = 3
 
-    def __init__(self, mask_prop=0., random_prop=0., keep_prop=0., n_classes=N_BASE):
+    def __init__(self, mask_prop=0., random_prop=0., keep_prop=0., n_classes=N_BASE, null_class=N_BASE):
         self.n_classes = n_classes
+        self.null_class = null_class
         self.set_mask_props(mask_prop, random_prop, keep_prop)
 
     def set_mask_props(self, mask_prop=0., random_prop=0.,keep_prop=0.):
@@ -58,7 +59,7 @@ class PositionMask():
                 torch.randint_like(x, self.n_classes))
 
     # apply to one-hot vector
-    def mask_fill(self, x, fill_value=0):
+    def mask_fill(self, x, fill_value):
         if x.dim() == 3:
             return x.permute(1, 0, 2).masked_fill(
                     (self.mask_val == self._MASK_INDEX), fill_value).permute(1, 0, 2)
@@ -78,7 +79,7 @@ class PositionMask():
         if generate_new_mask:
             self.generate(x)
         if mask_fill:
-            x = self.mask_fill(x)
+            x = self.mask_fill(x, self.null_class)
         if randomize_input:
             x = self.randomize_input(x)
         return x, self.get(mask_value=mask_value)

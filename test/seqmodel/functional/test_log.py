@@ -46,7 +46,7 @@ class Test_Conv(unittest.TestCase):
         npt.assert_array_less(normalized, 1 + 1e-5)
         npt.assert_array_less(0 - 1e-5, normalized)
         self.assertEqual(torch.sum(normalized[:,:, -1]).item(), 4)
-        
+
         x = torch.zeros(x.shape)
         hist = prediction_histograms(x, self.batch, n_bins=n_bins)
         npt.assert_array_equal(hist[:, :, 1:], torch.zeros(2, 4, n_bins - 1))
@@ -58,13 +58,13 @@ class Test_Conv(unittest.TestCase):
 
         x = one_hot(torch.ones(self.batch.shape))
         hist = prediction_histograms(x, self.batch, n_bins=n_bins)
-        npt.assert_array_equal(accuracy_per_class(hist), [0., 1., 0., 0.])
+        npt.assert_array_equal(accuracy_per_class(hist, threshold_prob=0.), [0., 1., 0., 0.])
         npt.assert_array_equal(accuracy_per_class(hist, threshold_prob=0.5), [0., 0., 0., 0.])
 
         hist = prediction_histograms(x[1], self.batch[1], n_bins=n_bins)
-        npt.assert_array_equal(accuracy_per_class(hist), [0., 1., 0., 0.])
+        npt.assert_array_equal(accuracy_per_class(hist, threshold_prob=0.), [0., 1., 0., 0.])
         npt.assert_array_equal(accuracy_per_class(hist, threshold_prob=0.5), [0., 0., 0., 0.])
-    
+
     def test_excerpt(self):
         x = torch.arange(10)
         y = excerpt(x, max_sizes=[5])[0]
