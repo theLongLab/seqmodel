@@ -15,8 +15,16 @@ from seqmodel.functional.mask import PositionMask
 from seqmodel.seqdata.mapseq import RandomRepeatSequence
 from seqmodel.seqdata.iterseq import StridedSequence, bed_from_file,fasta_from_file
 from seqmodel.functional.transform import INDEX_TO_BASE, Compose, one_hot_to_index
-from seqmodel.task.log import prediction_histograms, normalize_histogram, \
+from seqmodel.functional.log import prediction_histograms, normalize_histogram, \
                             summarize, correct, accuracy_per_class
+
+from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
+
+class InEpochCheckpoint(ModelCheckpoint):
+
+    def on_train_batch_end(self, trainer, pl_module, batch, batch_idx, dataloader_idx):
+        if batch_idx % self.hparams.print_progress_freq == 0:
+            super().on_validation_end(self, trainer, pl_module)
 
 
 class SeqBERT(LightningModule):
@@ -173,6 +181,7 @@ def main():
     seed_everything(0)
     print(args)
     model = SeqBERT(**vars(args))
+    args.callbacks = [InEpochCheckpoint()]
     trainer = Trainer.from_argparse_args(args)
     trainer.fit(model)
 

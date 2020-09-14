@@ -4,3 +4,4 @@ outputs/**
 data/**
 data
 lightning_logs
+**.tar.gz
