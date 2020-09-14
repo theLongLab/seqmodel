@@ -194,6 +194,7 @@ class SeqBERT(LightningModule):
         parser.add_argument('--valid_intervals', default=None, type=str)
         parser.add_argument('--seq_len', default=500, type=int)
         parser.add_argument('--print_progress_freq', default=1000, type=int)
+        parser.add_argument('--save_checkpoint_freq', default=1000, type=int)
         parser.add_argument('--DEBUG_use_random_data', default=False, type=bool)
         parser.add_argument('--DEBUG_random_repeat_len', default=1, type=int)
         parser.add_argument('--DEBUG_random_n_repeats', default=500, type=int)
@@ -212,7 +213,7 @@ def main():
     seed_everything(0)
     print(args)
     model = SeqBERT(**vars(args))
-    args.callbacks = [CheckpointEveryNSteps(args.print_progress_freq)]
+    args.callbacks = [CheckpointEveryNSteps(args.save_checkpoint_freq)]
     trainer = Trainer.from_argparse_args(args)
     trainer.fit(model)
 

@@ -1,15 +1,13 @@
 #!/bin/bash
 #SBATCH --job-name=seqbert-bp
-#SBATCH --account=def-quanlong		  # needed for resource billing if using compute canada
-#SBATCH --time=12:00:00				  # max walltime in D-HH:MM or HH:MM:SS
+#SBATCH --account=def-quanlong            # needed for resource billing if using compute canada
+#SBATCH --time=12:00:00                           # max walltime in D-HH:MM or HH:MM:SS
 #SBATCH --cpus-per-task=4             # number of cores
-#SBATCH --gres=gpu:p100:1         	  # type and number of GPU(s) per node
-#SBATCH --mem=16000					  # max memory (default unit is MB) per node
-#SBATCH --output=hpc-test%j.out		  # file name for the output
-#SBATCH --error=hpc-test%j.err		  # file name for errors
-					                  # %j gets replaced by the job number
-#SBATCH --mail-user=devin.kwok@ucalgary.ca  # mail job notifications here
-#SBATCH --mail-type=ALL				  # what to notify about
+#SBATCH --gres=gpu:p100:1                 # type and number of GPU(s) per node
+#SBATCH --mem=16000                                       # max memory (default unit is MB) per node
+#SBATCH --output=seqbert-bp%j.out                 # file name for the output
+#SBATCH --error=seqbert-bp%j.err                  # file name for errors
+                                                          # %j gets replaced by the job number
 
 ## project name
 NAME_DIR=seqmodel-seqbert-bp
@@ -51,30 +49,30 @@ tar xzf $DATA_DIR/*.tar.gz -C $SLURM_TMPDIR/$NAME_DIR
 ## make output dir if does not exist
 mkdir $OUT_DIR
 
-## run test
-## test takes data from dir at -i and writes to dir at -o
-
+# hparams
 python $SOURCE_DIR/src/experiment/seqbert.py \
-	--deterministic=True \
+    --deterministic=True \
     --n_dims=512 \
     --n_heads=4 \
-    --n_layers=4 \
-    --n_decode_layers=4 \
+    --n_layers=8 \
+    --n_decode_layers=8 \
     --feedforward_dims=1024 \
-    --dropout=0.0 \
     --position_embedding=Sinusoidal \
+    --batch_size=16 \
+    --accumulate_grad_batches=2 \
+    --learning_rate=3e-4 \
+    --seq_len=1000 \
+    --dropout=0.0 \
     --keep_prop=0.03 \
     --mask_prop=0.1 \
     --random_prop=0.02 \
     --num_workers=4 \
-    --batch_size=32 \
-    --learning_rate=3e-4 \
-    --seq_len=1000 \
-    --print_progress_freq=5000 \
+    --print_progress_freq=500 \
+    --save_checkpoint_freq=5000 \
     --seq_file=$SLURM_TMPDIR/$NAME_DIR/data/ref_genome/p12/assembled_chr/GRCh38_p12_assembled_chr.fa \
     --train_intervals=$SLURM_TMPDIR/$NAME_DIR/data/ref_genome/grch38-train.bed \
     --valid_intervals=$SLURM_TMPDIR/$NAME_DIR/data/ref_genome/grch38-1M-valid.bed \
-	--default_root_dir=$OUT_DIR \
+    --default_root_dir=$OUT_DIR \
 
 ## clean up by stopping virtualenv
 deactivate
