@@ -38,6 +38,8 @@ source $SLURM_TMPDIR/env/bin/activate
 ## install project dependencies
 pip install --no-index --upgrade pip
 pip install --no-index -r $SOURCE_DIR/requirements.txt
+## these dependencies need to be downloaded
+pip install pyfaidx pytorch-lightning
 
 ## extract all data files in tar and tar.gz formats
 ## compute canada guidelines say to keep files archived to reduce disk utilization
@@ -65,9 +67,10 @@ python $SOURCE_DIR/src/experiment/seqbert.py \
     --mask_prop=0.1 \
     --random_prop=0.02 \
     --num_workers=4 \
-    --batch_size=64 \
+    --batch_size=32 \
     --learning_rate=3e-4 \
     --seq_len=1000 \
+    --print_progress_freq=5000 \
     --seq_file=$SLURM_TMPDIR/$NAME_DIR/data/ref_genome/p12/assembled_chr/GRCh38_p12_assembled_chr.fa \
     --train_intervals=$SLURM_TMPDIR/$NAME_DIR/data/ref_genome/grch38-train.bed \
     --valid_intervals=$SLURM_TMPDIR/$NAME_DIR/data/ref_genome/grch38-1M-valid.bed \
