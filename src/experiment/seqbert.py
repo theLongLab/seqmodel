@@ -18,13 +18,44 @@ from seqmodel.functional.transform import INDEX_TO_BASE, Compose, one_hot_to_ind
 from seqmodel.functional.log import prediction_histograms, normalize_histogram, \
                             summarize, correct, accuracy_per_class
 
-from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 
-class InEpochCheckpoint(ModelCheckpoint):
+# from https://github.com/PyTorchLightning/pytorch-lightning/issues/2534
+class CheckpointEveryNSteps(pl.Callback):
+    """
+    Save a checkpoint every N steps, instead of Lightning's default that checkpoints
+    based on validation loss.
+    """
 
-    def on_train_batch_end(self, trainer, pl_module, batch, batch_idx, dataloader_idx):
-        if batch_idx % self.hparams.print_progress_freq == 0:
-            super().on_validation_end(self, trainer, pl_module)
+    def __init__(
+        self,
+        save_step_frequency,
+        prefix="N-Step-Checkpoint",
+        use_modelcheckpoint_filename=False,
+    ):
+        """
+        Args:
+            save_step_frequency: how often to save in steps
+            prefix: add a prefix to the name, only used if
+                use_modelcheckpoint_filename=False
+            use_modelcheckpoint_filename: just use the ModelCheckpoint callback's
+                default filename, don't use ours.
+        """
+        self.save_step_frequency = save_step_frequency
+        self.prefix = prefix
+        self.use_modelcheckpoint_filename = use_modelcheckpoint_filename
+
+    def on_batch_end(self, trainer: pl.Trainer, _):
+        """ Check if we should save a checkpoint after every train batch """
+        epoch = trainer.current_epoch
+        global_step = trainer.global_step
+        if global_step % self.save_step_frequency == 0:
+            if self.use_modelcheckpoint_filename:
+                filename = trainer.checkpoint_callback.filename
+            else:
+                filename = f"{self.prefix}_{epoch=}_{global_step=}.ckpt"
+            ckpt_path = os.path.join(trainer.checkpoint_callback.dirpath, filename)
+            print("Saving to", ckpt_path)
+            trainer.save_checkpoint(ckpt_path)
 
 
 class SeqBERT(LightningModule):
@@ -181,7 +212,7 @@ def main():
     seed_everything(0)
     print(args)
     model = SeqBERT(**vars(args))
-    args.callbacks = [InEpochCheckpoint()]
+    args.callbacks = [CheckpointEveryNSteps(args.print_progress_freq)]
     trainer = Trainer.from_argparse_args(args)
     trainer.fit(model)
 
