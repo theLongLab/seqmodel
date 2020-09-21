@@ -17,25 +17,75 @@ def fasta_from_file(fasta_filename):
     return Fasta(fasta_filename, as_raw=True)  # need as_raw=True to return strings
 
 
+class SequentialData():
+
+    # make new copy of sequence internals for multiple data loader workers
+    def instance(self):
+        raise NotImplementedError()
+
+    # get sequence data
+    def get(self, seqname, coord_start, coord_end):
+        raise NotImplementedError()
+
+    @property
+    def seqnames(self):
+        raise NotImplementedError()
+
+    @property
+    def starts(self):
+        raise NotImplementedError()
+
+    @property
+    def ends(self):
+        raise NotImplementedError()
+
+    def all_intervals(self):
+        return {
+            'seqname': self.seqnames,
+            'start': self.starts,
+            'end': self.ends,
+        }
+
+
+class FastaFile(SequentialData):
+
+    def __init__(self, filename):
+        self.filename = filename
+        self.instance()
+    
+    def instance(self):
+        self.fasta = Fasta(self.filename, as_raw=True)
+    
+    def get(self, seqname, coord_start, coord_end):
+        return self.fasta[seqname][coord_start:coord_end]
+
+    @property
+    def seqnames(self):
+        return list(self.fasta.keys())
+
+    @property
+    def starts(self):
+        return [0] * len(self.fasta.keys())
+
+    @property
+    def ends(self):
+        return [len(seq) for seq in self.fasta.values()]
+
+
 class StridedSequence(IterableDataset):
 
     """
         sequential: if True, this is equivalent to setting stride=1 and start_offset=0
     """
-    def __init__(self, fasta_file, seq_len, include_intervals=None, transforms=bioseq_to_index,
+    def __init__(self, sequence_data, seq_len, include_intervals=None, transforms=bioseq_to_index,
                 sequential=False, stride=None, start_offset=None):
-        self.fasta_file = fasta_file
-        self.fasta = fasta_from_file(self.fasta_file)
+        self.sequence_data = sequence_data
         self.seq_len = seq_len
         self._cutoff = self.seq_len - 1
         self.transforms = transforms
         self.include_intervals = include_intervals
-        if self.include_intervals is None:  # use entire fasta sequence
-            self.include_intervals = {
-                'seqname': list(self.fasta.keys()),
-                'start': [0] * len(self.fasta.keys()),
-                'end': [len(seq) for seq in self.fasta.values()],
-            }
+        if self.include_intervals is None:  # use entire sequence
+            self.include_intervals = self.sequence_data.all_intervals()
         self._gen_interval_table(self.include_intervals)
 
         if sequential:  # return sequences in order from beginning
@@ -71,7 +121,7 @@ class StridedSequence(IterableDataset):
     def _worker_init_fn(worker_id):
         worker_info = torch.utils.data.get_worker_info()
         dataset = worker_info.dataset
-        dataset.fasta = fasta_from_file(dataset.fasta_file)  # need new object for concurrency
+        dataset.sequence_data.instance()  # need new object for concurrency
         n_per_worker = int(ceil(dataset.n_seq / worker_info.num_workers))
         dataset._iter_start = n_per_worker * worker_info.id  # split indexes by worker id
         dataset._iter_end = min(dataset._iter_start + n_per_worker, dataset.n_seq)
@@ -96,5 +146,5 @@ class StridedSequence(IterableDataset):
     def __iter__(self):
         for i in range(self._iter_start, self._iter_end):
             key, coord = self.index_to_coord(i)
-            seq = self.fasta[key][coord:coord + self.seq_len]
+            seq = self.sequence_data.get(key, coord, coord + self.seq_len)
             yield self.transforms(seq), key, coord

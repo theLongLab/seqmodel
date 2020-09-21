@@ -13,7 +13,7 @@ from seqmodel.model.conv import DilateConvEncoder, SeqFeedForward
 from seqmodel.model.attention import SinusoidalPosition
 from seqmodel.functional.mask import PositionMask
 from seqmodel.seqdata.mapseq import RandomRepeatSequence
-from seqmodel.seqdata.iterseq import StridedSequence, bed_from_file,fasta_from_file
+from seqmodel.seqdata.iterseq import StridedSequence, bed_from_file, FastaFile
 from seqmodel.functional.transform import INDEX_TO_BASE, Compose, one_hot_to_index
 from seqmodel.functional.log import prediction_histograms, normalize_histogram, \
                             summarize, correct, accuracy_per_class
@@ -95,8 +95,8 @@ class SeqBERT(LightningModule):
             intervals = None
             if self.hparams.train_intervals is not None:
                 intervals = bed_from_file(self.hparams.train_intervals)
-            train_data = StridedSequence(
-                self.hparams.seq_file, self.hparams.seq_len, include_intervals=intervals, sequential=False)
+            train_data = StridedSequence(FastaFile(self.hparams.seq_file),
+                        self.hparams.seq_len, include_intervals=intervals, sequential=False)
         return train_data.get_data_loader(self.hparams.batch_size, self.hparams.num_workers)
 
     def val_dataloader(self):
@@ -109,8 +109,8 @@ class SeqBERT(LightningModule):
             intervals = None
             if self.hparams.valid_intervals is not None:
                 intervals = bed_from_file(self.hparams.valid_intervals)
-            valid_data = StridedSequence(
-                self.hparams.seq_file, self.hparams.seq_len, include_intervals=intervals, sequential=True)
+            valid_data = StridedSequence(FastaFile(self.hparams.seq_file),
+                        self.hparams.seq_len, include_intervals=intervals, sequential=True)
         return valid_data.get_data_loader(self.hparams.batch_size, self.hparams.num_workers)
 
     def forward(self, batch):

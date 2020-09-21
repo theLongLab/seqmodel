@@ -13,8 +13,8 @@ from seqmodel.seqdata.iterseq import *
 class Test_StridedSeq(unittest.TestCase):
 
     def setUp(self):
-        self.fasta = 'test/data/short.fa'
-        self.seqs = [bioseq_to_index(x[:len(x)]) for x in fasta_from_file(self.fasta).values()]
+        self.fasta = FastaFile('test/data/short.fa')
+        self.seqs = [bioseq_to_index(x[:len(x)]) for x in fasta_from_file('test/data/short.fa').values()]
 
     def test_StridedSequence(self):
         dataset = StridedSequence(self.fasta, 3, sequential=True)
@@ -58,7 +58,7 @@ class Test_StridedSeq(unittest.TestCase):
 
         intervals = pd.read_csv('data/ref_genome/grch38_contig_intervals.bed',
                                 names=['seqname', 'start', 'end'], sep='\t')
-        dataset = StridedSequence('data/ref_genome/p12/assembled_chr/GRCh38_p12_assembled_chr.fa',
+        dataset = StridedSequence(FastaFile('data/ref_genome/p12/assembled_chr/GRCh38_p12_assembled_chr.fa'),
                                 100, sequential=True, include_intervals=intervals)
         for i, _, _ in dataset:
             self.assertFalse(np.any((i == 4).numpy()))
