@@ -75,6 +75,23 @@ class Test_Transforms(unittest.TestCase):
         fn = Compose(one_hot, reverse, complement, reverse_complement)
         npt.assert_array_equal(fn(self.indexes), one_hot(self.indexes))
 
+    def test_flank(self):
+        x = torch.randn(10)
+        y = flank(x)
+        npt.assert_array_equal(y, x)
+        start = torch.zeros(7)
+        y = flank(x, start)
+        npt.assert_array_equal(y[:7], start)
+        npt.assert_array_equal(y[7:], x)
+        end = torch.ones(7)
+        y = flank(x, end_flank=end)
+        npt.assert_array_equal(y[:-7], x)
+        npt.assert_array_equal(y[-7:], end)
+        y = flank(x, start, end)
+        npt.assert_array_equal(y[:7], start)
+        npt.assert_array_equal(y[7:-7], x)
+        npt.assert_array_equal(y[-7:], end)
+
 
 if __name__ == '__main__':
     unittest.main()

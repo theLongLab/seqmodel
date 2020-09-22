@@ -23,6 +23,12 @@ class Test_PositionMask(unittest.TestCase):
         npt.assert_array_equal(mask1, torch.zeros(self.x.shape, dtype=torch.int8))
         self.mask.generate(self.x, require_loss_pos=True)
         self.assertEqual(self.mask.mask_val[0, 0].item(), PositionMask._KEEP_INDEX)
+        self.mask = PositionMask(mask_prop=1.)
+        self.mask.generate(self.x, flank_start=3, flank_end=2)
+        mask1 = self.mask.mask_val
+        npt.assert_array_equal(mask1[:, :3], torch.zeros_like(self.x)[:, :3])
+        npt.assert_array_equal(mask1[:, 3:-2], torch.ones_like(self.x)[:, 3:-2])
+        npt.assert_array_equal(mask1[:, -2:], torch.zeros_like(self.x)[:, -2:])
 
     def test_set_mask_props(self):
         def assert_equal_props(mask_1, mask_2):

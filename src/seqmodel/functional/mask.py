@@ -42,15 +42,20 @@ class PositionMask():
         self._keep_cutoff = self._random_cutoff + random_prop
 
     # generate from index vector size
-    def generate(self, x, require_loss_pos=True):
+    # flank_start and flank_end positions from start/end are ignored
+    def generate(self, x, require_loss_pos=True, flank_start=0, flank_end=0):
         prob = torch.rand_like(x, dtype=torch.float32)
         self.mask_val = (prob > self._mask_cutoff).type(torch.int8) \
                     + (prob > self._random_cutoff).type(torch.int8) \
                     + (prob > self._keep_cutoff).type(torch.int8)
         del prob
+        if flank_start > 0:
+            self.mask_val[:,:flank_start] = self._NO_LOSS_INDEX
+        if flank_end > 0:
+            self.mask_val[:, -flank_end:] = self._NO_LOSS_INDEX
         if require_loss_pos:
             if torch.sum(self.mask_val) == 0:  # no item was selected for calculating loss
-                self.mask_val[0, 0] = self._KEEP_INDEX  # unmask the first item
+                self.mask_val[0, flank_start] = self._KEEP_INDEX  # unmask the first item
         return self.mask_val
 
     # apply to index vector
@@ -75,9 +80,9 @@ class PositionMask():
         return mask.masked_fill((self.mask_val == self._MASK_INDEX), mask_value)
 
     def attn_mask(self, x, mask_value=float('-inf'), generate_new_mask=True,
-                        randomize_input=True, mask_fill=False):
+                randomize_input=True, mask_fill=False, flank_start=0, flank_end=0):
         if generate_new_mask:
-            self.generate(x)
+            self.generate(x, flank_start=flank_start, flank_end=flank_end)
         if mask_fill:
             x = self.mask_fill(x, self.null_class)
         if randomize_input:

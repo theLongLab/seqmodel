@@ -31,6 +31,15 @@ def index_to_bioseq(tensor):
     assert len(tensor.shape) == 1
     return Seq(''.join([INDEX_TO_BASE[i] for i in tensor.cpu().detach().numpy()]))
 
+# append sequences start_flank, end_flank to start and end of seq
+# assumes index tensors
+def flank(seq, start_flank=None, end_flank=None):
+    if start_flank is None:
+        start_flank = torch.tensor([], dtype=seq.dtype)
+    if end_flank is None:
+        end_flank = torch.tensor([], dtype=seq.dtype)
+    return torch.cat([start_flank, seq, end_flank], dim=0)
+
 def one_hot(index_sequence, indexes=range(N_BASE), dim=1):
     with torch.no_grad():
         return torch.stack([(index_sequence == i).float() for i in indexes], dim=dim)
@@ -56,7 +65,6 @@ def reverse_complement(x):
 def swap(x, dim=1):
     a, b = torch.split(x, x.shape[dim] // 2, dim=dim)
     return torch.cat([b, a], dim=dim)
-
 
 # composes multiple functions together
 class Compose(nn.Module):
