@@ -92,6 +92,42 @@ class Test_Transforms(unittest.TestCase):
         npt.assert_array_equal(y[7:-7], x)
         npt.assert_array_equal(y[-7:], end)
 
+    def test_single_split(self):
+        a, b = single_split(self.indexes)
+        npt.assert_array_equal(a, self.indexes[:, :(self.seq_len // 2)])
+        npt.assert_array_equal(b, self.indexes[:, (self.seq_len // 2):])
+        a, b = single_split(self.indexes, prop=0.1)
+        npt.assert_array_equal(a, self.indexes[:, :(self.seq_len // 10)])
+        npt.assert_array_equal(b, self.indexes[:, (self.seq_len // 10):])
+
+    def test_permute(self):
+        def rows_equal(tensor_1, tensor_2, mask=None):
+            if mask is None:
+                mask = torch.ones(tensor_1.shape[0], dtype=torch.bool)
+            is_equal = []
+            for i, do_check in enumerate(mask):
+                if do_check:
+                    is_equal.append(torch.all(tensor_1[i,:] == tensor_2[i,:]))
+            return torch.tensor(is_equal)
+
+        is_permuted, x = permute(self.indexes, prop=0)
+        npt.assert_array_equal(is_permuted, torch.zeros(self.batches, dtype=torch.bool))
+        self.assertTrue(torch.all(rows_equal(x, self.indexes)))
+        npt.assert_array_equal(x, self.indexes)  # this does the same thing, but tests rows_equal
+
+        is_permuted, x = permute(self.indexes, prop=1.)
+        npt.assert_array_equal(is_permuted, torch.ones(self.batches, dtype=torch.bool))
+        self.assertFalse(torch.any(rows_equal(x, self.indexes)))
+
+        is_permuted, x = permute(self.indexes)
+        self.assertTrue(torch.sum(is_permuted), self.batches // 2)
+        is_not_permuted = torch.logical_not(is_permuted)
+        self.assertTrue(torch.all(rows_equal(x, self.indexes, mask=is_not_permuted)))
+        same = torch.masked_select(x.permute(1, 0), is_not_permuted)
+        ref = torch.masked_select(self.indexes.permute(1, 0), is_not_permuted)
+        npt.assert_array_equal(same, ref)  # double check the above line
+        self.assertFalse(torch.any(rows_equal(x, self.indexes, mask=is_permuted)))
+
 
 if __name__ == '__main__':
     unittest.main()

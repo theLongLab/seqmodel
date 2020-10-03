@@ -7,8 +7,6 @@ import torch
 from pyfaidx import Fasta
 from torch.utils.data import IterableDataset
 
-from seqmodel.functional.transform import bioseq_to_index
-
 
 def bed_from_file(bed_filename):
     return pd.read_csv(bed_filename, sep='\t', names=['seqname', 'start', 'end'])
@@ -77,7 +75,8 @@ class StridedSequence(IterableDataset):
     """
         sequential: if True, this is equivalent to setting stride=1 and start_offset=0
     """
-    def __init__(self, sequence_data, seq_len, include_intervals=None, transforms=bioseq_to_index,
+    def __init__(self, sequence_data, seq_len, include_intervals=None,
+                transforms=torch.nn.Identity(),
                 sequential=False, stride=None, start_offset=None):
         self.sequence_data = sequence_data
         self.seq_len = seq_len

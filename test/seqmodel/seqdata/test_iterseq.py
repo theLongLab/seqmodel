@@ -6,7 +6,6 @@ import numpy as np
 from pyfaidx import Fasta
 import numpy.testing as npt
 
-from seqmodel.functional.transform import bioseq_to_index
 from seqmodel.seqdata.iterseq import *
 
 
@@ -14,7 +13,7 @@ class Test_StridedSeq(unittest.TestCase):
 
     def setUp(self):
         self.fasta = FastaFile('test/data/short.fa')
-        self.seqs = [bioseq_to_index(x[:len(x)]) for x in fasta_from_file('test/data/short.fa').values()]
+        self.seqs = [x[:len(x)] for x in fasta_from_file('test/data/short.fa').values()]
 
     def test_StridedSequence(self):
         dataset = StridedSequence(self.fasta, 3, sequential=True)
@@ -61,7 +60,7 @@ class Test_StridedSeq(unittest.TestCase):
         dataset = StridedSequence(FastaFile('data/ref_genome/p12/assembled_chr/GRCh38_p12_assembled_chr.fa'),
                                 100, sequential=True, include_intervals=intervals)
         for i, _, _ in dataset:
-            self.assertFalse(np.any((i == 4).numpy()))
+            self.assertFalse(i == 'N')
             break
 
 if __name__ == '__main__':
