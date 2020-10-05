@@ -69,7 +69,8 @@ class RandomRepeatSequence(torch.utils.data.Dataset):
         return self.n_batch
 
     def __getitem__(self, index):
-        return bioseq_to_index(self.seq[index * self.seq_len: (index + 1) * self.seq_len])
+        seq = bioseq_to_index(self.seq[index * self.seq_len: (index + 1) * self.seq_len])
+        return seq, ('Random', index)
 
 
 # quickly create a batch for testing purposes

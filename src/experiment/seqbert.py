@@ -112,8 +112,9 @@ class SeqBERT(LightningModule):
             train_data = RandomRepeatSequence(self.hparams.seq_len, n_batch=10000,
                                 n_repeats=self.hparams.DEBUG_random_n_repeats,
                                 repeat_len=self.hparams.DEBUG_random_repeat_len)
+            return torch.utils.data.DataLoader(train_data, batch_size=self.hparams.batch_size,
+                                    shuffle=True, num_workers=self.hparams.num_workers)
         else:
-            # train_data = MapSequence.from_file('data/ref_genome/chr22_excerpt_4m.fa', 500, remove_gaps=True)
             intervals = None
             if self.hparams.train_intervals is not None:
                 intervals = bed_from_file(self.hparams.train_intervals)
@@ -127,8 +128,9 @@ class SeqBERT(LightningModule):
             valid_data = RandomRepeatSequence(self.hparams.seq_len, n_batch=100,
                                 n_repeats=self.hparams.DEBUG_random_n_repeats,
                                 repeat_len=self.hparams.DEBUG_random_repeat_len)
+            return torch.utils.data.DataLoader(valid_data, batch_size=self.hparams.batch_size,
+                                    shuffle=False, num_workers=self.hparams.num_workers)
         else:
-            # valid_data = MapSequence.from_file('data/ref_genome/chr22_excerpt_800k.fa', 500, remove_gaps=True)
             intervals = None
             if self.hparams.valid_intervals is not None:
                 intervals = bed_from_file(self.hparams.valid_intervals)
@@ -170,7 +172,7 @@ class SeqBERT(LightningModule):
         masked_predict_loss = self.loss_fn(mask_select(predicted, mask != self.NO_LOSS_INDEX),
                                             mask_select(target, mask != self.NO_LOSS_INDEX))
         # apply classification loss separately
-        cls_loss = self.loss_fn(predicted[:, 0,:], target[:, 0])
+        cls_loss = self.loss_fn(predicted[:, :, 0], target[:, 0])
         loss = masked_predict_loss + self.hparams.cls_regularization * cls_loss
         return loss, predicted, latent, source, target, mask
 
@@ -200,11 +202,16 @@ class SeqBERT(LightningModule):
             correct(predicted, target),
             predicted.permute(1, 0, 2),
             index_symbols=self.tokens + [' ', '_', '?', '='])
+        print(
+            source[:, 0],
+            target[:, 0],
+            predicted.permute(1, 0, 2)[:, :, 0],
+            correct(predicted[:, :, 0], target[:, 0]))
         hist = prediction_histograms(predicted.detach().cpu(), target.detach().cpu(), n_bins=5)
         acc = normalize_histogram(hist)
         acc_numbers = accuracy_per_class(hist, threshold_prob=1. / len(self.tokens))
         str_acc = summarize(acc, col_labels=INDEX_TO_BASE, normalize_fn=None)
-        cls_acc = accuracy(predicted[:, 0], target[:, 0])
+        cls_acc = accuracy(predicted[:, :, 0], target[:, 0])
         print(seqname[0], coord[0], cls_acc, acc_numbers)
         print(str_acc, str_train_sample, sep='\n')
 

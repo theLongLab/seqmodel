@@ -54,18 +54,18 @@ python $SOURCE_DIR/src/experiment/seqbert.py \
     --deterministic=True \
     --n_dims=512 \
     --n_heads=4 \
-    --n_layers=8 \
-    --n_decode_layers=8 \
+    --n_layers=4 \
+    --n_decode_layers=4 \
     --feedforward_dims=1024 \
     --position_embedding=Sinusoidal \
-    --batch_size=16 \
-    --accumulate_grad_batches=2 \
+    --batch_size=32 \
     --learning_rate=3e-4 \
     --seq_len=1000 \
     --dropout=0.0 \
     --keep_prop=0.03 \
     --mask_prop=0.1 \
     --random_prop=0.02 \
+    --cls_regularization=1. \
     --num_workers=4 \
     --print_progress_freq=500 \
     --save_checkpoint_freq=5000 \
@@ -73,6 +73,7 @@ python $SOURCE_DIR/src/experiment/seqbert.py \
     --train_intervals=$SLURM_TMPDIR/$NAME_DIR/data/ref_genome/grch38-train.bed \
     --valid_intervals=$SLURM_TMPDIR/$NAME_DIR/data/ref_genome/grch38-1M-valid.bed \
     --default_root_dir=$OUT_DIR \
+    # --accumulate_grad_batches=1 \
 
 ## clean up by stopping virtualenv
 deactivate
