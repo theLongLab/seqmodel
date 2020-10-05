@@ -6,103 +6,72 @@ import torch.nn as nn
 from seqmodel.functional.transform import N_BASE, Compose, one_hot
 
 
-class PositionMask():
+"""
+Functions to assist masked token prediction (Cloze) from BERT.
+Takes in batched sequences of indexes, masks sequence, and calculates loss
+relative to original sequence.
 
-    """
-    Task for masked token prediction (Cloze) from BERT.
-    Takes in batched sequences of indexes, masks sequence, and calculates loss
-    relative to original sequence.
+All functions assume input has dimensions (batch, seq_len) or (batch, channels, seq_len)
+This follows the standard for convolutions in pytorch, not for transformers.
 
-    All functions assume input has dimensions (batch, seq_len) or (batch, channels, seq_len)
-    This follows the standard for convolutions in pytorch, not for transformers.
+Args:
+    mask_props: list of n proportions for which indexed values 0...n are assigned
+        index of n is for any remaining unmasked values
+"""
+def prop_cutoffs(mask_props):
+    cutoffs = [None] * len(mask_props)
+    for i, prop in enumerate(mask_props):
+        assert prop >= 0.
+        cutoffs[i] = sum(mask_props[:(i + 1)])
+    no_loss_prop = 1. - sum(mask_props)
+    assert no_loss_prop >= 0.
+    return cutoffs
 
-    Args:
-        no_loss_prop: (implicit) proportion of data that isn't used to calculate loss
-        mask_prop: proportion of data masked in input
-        random_prop: proportion of data which is randomly shuffled in input
-        keep_prop: proportion of data that is part of loss but unchanged
-        n_classes: how many indices to draw from for random replacement
-    """
-    _NO_LOSS_INDEX = 0
-    _MASK_INDEX = 1
-    _RANDOM_INDEX = 2
-    _KEEP_INDEX = 3
+# generate mask matching shape of x
+# mask_props indicate proportion of nonzero indexes
+# e.g. [0.1, 0.2] gives P(X=0) = 0.7, P(X=1) = 0.1, P(X=2) = 0.2
+def generate_mask(x, mask_props, require_loss_pos=False):
+    n_indexes = len(mask_props)
+    cutoffs = prop_cutoffs(mask_props)
+    if n_indexes < 2 ** 8:
+        dtype = torch.int8
+    else:
+        dtype = torch.long
+    prob = torch.rand_like(x, dtype=torch.float32)
+    mask = torch.zeros_like(x, dtype=dtype)
+    for i in range(n_indexes, 0, -1):
+        mask = mask.masked_fill(prob < cutoffs[i-1], i)
+    del prob
+    if require_loss_pos:  # make last item's mask index nonzero to avoid NaN loss
+        if torch.sum(mask) == 0:  # no item was selected for calculating loss
+            mask[-1, -1] = 1  #(last position avoids conflict with classification token in BERT)
+    return mask
 
-    def __init__(self, mask_prop=0., random_prop=0., keep_prop=0., n_classes=N_BASE, null_class=N_BASE):
-        self.n_classes = n_classes
-        self.null_class = null_class
-        self.set_mask_props(mask_prop, random_prop, keep_prop)
+# apply to index vector
+# random classes must be in {0, 1, ... n_classes - 1}
+def mask_randomize(x, bool_mask, n_classes):
+    return x.masked_scatter(bool_mask, torch.randint_like(x, n_classes))
 
-    def set_mask_props(self, mask_prop=0., random_prop=0.,keep_prop=0.):
-        no_loss_prop = 1. - (mask_prop + random_prop + keep_prop)
-        assert (no_loss_prop >= 0. and mask_prop >= 0. \
-                and random_prop >= 0. and keep_prop >= 0.)
-        self._mask_cutoff = no_loss_prop
-        self._random_cutoff = self._mask_cutoff + mask_prop
-        self._keep_cutoff = self._random_cutoff + random_prop
+# apply to either one-hot with (batch, channels, length) dims
+# or index vector (batch, length)
+def mask_fill(x, bool_mask, fill_value):
+    # need to permute to broadcast mask, then permute back
+    if x.dim() == 3:
+        return x.permute(1, 0, 2).masked_fill(
+                bool_mask, fill_value).permute(1, 0, 2)
+    else:
+        return x.masked_fill(bool_mask, fill_value)
 
-    # generate from index vector size
-    # flank_start and flank_end positions from start/end are ignored
-    def generate(self, x, require_loss_pos=True, flank_start=0, flank_end=0):
-        prob = torch.rand_like(x, dtype=torch.float32)
-        self.mask_val = (prob > self._mask_cutoff).type(torch.int8) \
-                    + (prob > self._random_cutoff).type(torch.int8) \
-                    + (prob > self._keep_cutoff).type(torch.int8)
-        del prob
-        if flank_start > 0:
-            self.mask_val[:,:flank_start] = self._NO_LOSS_INDEX
-        if flank_end > 0:
-            self.mask_val[:, -flank_end:] = self._NO_LOSS_INDEX
-        if require_loss_pos:
-            if torch.sum(self.mask_val) == 0:  # no item was selected for calculating loss
-                self.mask_val[0, flank_start] = self._KEEP_INDEX  # unmask the first item
-        return self.mask_val
-
-    # apply to index vector
-    def randomize_input(self, x):
-        return x.masked_scatter(self.mask_val == self._RANDOM_INDEX,
-                torch.randint_like(x, self.n_classes))
-
-    # apply to one-hot vector
-    def mask_fill(self, x, fill_value):
-        if x.dim() == 3:
-            return x.permute(1, 0, 2).masked_fill(
-                    (self.mask_val == self._MASK_INDEX), fill_value).permute(1, 0, 2)
-        else:
-            return x.masked_fill((self.mask_val == self._MASK_INDEX), fill_value)
-    
-    def get(self, mask_value=float('-inf')):
-        if type(mask_value) is bool:
-            if mask_value:
-                return self.mask_val == self._MASK_INDEX
-            return self.mask_val != self._MASK_INDEX
-        mask = torch.zeros_like(self.mask_val, dtype=torch.float)
-        return mask.masked_fill((self.mask_val == self._MASK_INDEX), mask_value)
-
-    def attn_mask(self, x, mask_value=float('-inf'), generate_new_mask=True,
-                randomize_input=True, mask_fill=False, flank_start=0, flank_end=0):
-        if generate_new_mask:
-            self.generate(x, flank_start=flank_start, flank_end=flank_end)
-        if mask_fill:
-            x = self.mask_fill(x, self.null_class)
-        if randomize_input:
-            x = self.randomize_input(x)
-        return x, self.get(mask_value=mask_value)
-
-    # order of dimensions is consistent between outputs but not consistent from input to output
-    # this is intended to feed into loss function or other aggregation function
-    def select(self, *xargs):
-        target_mask = self.mask_val != self._NO_LOSS_INDEX
-        output = []
-        for x in xargs:
-            # need to permute to broadcast mask
-            # then permute back after getting correct shape
-            if x.dim() == 3:
-                output.append(x.permute(1, 0, 2).masked_select(
-                        target_mask).reshape(self.n_classes, -1).permute(1, 0))
-            else:
-                output.append(x.masked_select(target_mask))
-        return output
+# order of dimensions is consistent between outputs but not consistent from input to output
+# this is intended to feed into loss function or other aggregation function
+def mask_select(x, bool_mask):
+    # need to permute to broadcast mask, then permute back and get correct shape
+    if x.dim() == 3:
+        n_classes = x.shape[1]  # assumes (batch, channels, seq_len)
+        return x.permute(1, 0, 2).masked_select(
+                bool_mask).reshape(n_classes, -1).permute(1, 0)
+    else:
+        return x.masked_select(bool_mask)
 
 
 class NextTokenMask():

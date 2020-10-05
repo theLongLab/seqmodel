@@ -63,6 +63,7 @@ def permute(batch, prop=0.5):
         cycle_y = torch.cat((cycle_x[1:], cycle_x[0:1]), dim=0)  # indexes to place items
         select_indexes = torch.arange(n_batch)
         select_indexes[cycle_y] = cycle_x  # apply permutation on indexes, then use indexed select
+        select_indexes = select_indexes.to(batch.device)
 
         # generate indicator vector
         is_permuted = torch.zeros_like(select_indexes, dtype=torch.bool)
