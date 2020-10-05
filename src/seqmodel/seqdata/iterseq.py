@@ -146,4 +146,4 @@ class StridedSequence(IterableDataset):
         for i in range(self._iter_start, self._iter_end):
             key, coord = self.index_to_coord(i)
             seq = self.sequence_data.get(key, coord, coord + self.seq_len)
-            yield self.transforms(seq), key, coord
+            yield self.transforms(seq), (key, coord)

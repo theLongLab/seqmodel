@@ -11,6 +11,7 @@ python src/experiment/seqbert.py \
     --keep_prop=0.03 \
     --mask_prop=0.1 \
     --random_prop=0.02 \
+    --cls_regularization=1. \
     --num_workers=4 \
     --batch_size=32 \
     --learning_rate=3e-4 \
@@ -18,5 +19,6 @@ python src/experiment/seqbert.py \
     --seq_file=data/ref_genome/p12/assembled_chr/GRCh38_p12_assembled_chr.fa \
     --train_intervals=data/ref_genome/grch38-train.bed \
     --valid_intervals=data/ref_genome/grch38-1M-valid.bed \
-    --default_root_dir='outputs'
+    --default_root_dir='outputs' \
+    --print_progress_freq=50 \
     # --seq_file=data/ref_genome/test-2k.fa \

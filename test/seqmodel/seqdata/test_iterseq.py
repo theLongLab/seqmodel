@@ -59,7 +59,7 @@ class Test_StridedSeq(unittest.TestCase):
                                 names=['seqname', 'start', 'end'], sep='\t')
         dataset = StridedSequence(FastaFile('data/ref_genome/p12/assembled_chr/GRCh38_p12_assembled_chr.fa'),
                                 100, sequential=True, include_intervals=intervals)
-        for i, _, _ in dataset:
+        for i, (_, _) in dataset:
             self.assertFalse(i == 'N')
             break
 
