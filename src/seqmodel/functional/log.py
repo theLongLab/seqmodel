@@ -177,3 +177,30 @@ def isint(tensor):
 def isfloat(tensor):
     return tensor.dtype == torch.float16 or tensor.dtype == torch.bfloat16 or \
             tensor.dtype == torch.float32 or tensor.dtype == torch.float64
+
+def summarize_weights_and_grads(module_dict, include_grad=False, threshold_trigger=0.):
+    output_str = ''
+    do_output = False
+    for name, module in module_dict.items():
+        output_str += str(name) + str(module)
+        for param in module.parameters():
+            if torch.abs(torch.max(param)).item() > threshold_trigger \
+                    or torch.abs(torch.min(param)).item() > threshold_trigger:
+                do_output = True
+            output_str += str(param.shape) + tensor_stats_str(param, include_grad=include_grad) + '\n'
+    if do_output:
+        return output_str + '\n'
+    return ''
+
+def get_stats(tensor):
+    std, mean = torch.std_mean(tensor)
+    return torch.min(tensor).item(), mean.item(), std.item(), torch.max(tensor).item()
+
+def tensor_stats_str(*tensors, include_grad=False):
+    if include_grad:
+        strings = ['<{:0.2f} [{:0.2f}/{:0.2f}] {:0.2f}> ({:0.2f} {{{:0.2f}/{:0.2f}}} {:0.2f})'.format(
+                *get_stats(t), *get_stats(t.grad)) for t in tensors]
+    else:
+        strings = ['<{:0.2f} [{:0.2f}/{:0.2f}] {:0.2f}>'.format(
+                *get_stats(t)) for t in tensors]
+    return ' || '.join(strings)

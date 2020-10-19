@@ -21,5 +21,7 @@ python src/experiment/seqbert.py \
     --valid_intervals=data/ref_genome/grch38-1M-valid.bed \
     --default_root_dir='outputs' \
     --print_progress_freq=50 \
-    --DEBUG_use_random_data=True \
     # --seq_file=data/ref_genome/test-2k.fa \
+    # --DEBUG_use_random_data=False \
+    # --DEBUG_random_repeat_len=2 \
+    # --DEBUG_random_n_repeats=100 \
