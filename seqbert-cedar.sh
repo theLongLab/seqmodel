@@ -19,9 +19,11 @@ NAME_DIR=seqmodel-seqbert-bp
 ## source and data from here
 SOURCE_DIR=~/proj/$NAME_DIR
 ## data archives (archived): use ~/scratch/data for short term, ~/data for long term data
-DATA_DIR=~/data/$NAME_DIR
+DATA_DIR=~/scratch/$NAME_DIR/data
 ## outputs to here: use ~/scratch/out for short term, ~/out for long term data
 OUT_DIR=~/scratch/$NAME_DIR
+## this is for fast disk access
+RUN_DIR=$SLURM_TMPDIR
 
 ## load modules
 ## use `module avail`, `module spider` to find relevant modules
@@ -42,9 +44,9 @@ pip install pyfaidx pytorch-lightning
 ## extract all data files in tar and tar.gz formats
 ## compute canada guidelines say to keep files archived to reduce disk utilization
 ## when accessing data, use `$SLURM_TMPDIR` which is fastest storage directly attached to compute nodes
-mkdir $SLURM_TMPDIR/$NAME_DIR
-tar xf $DATA_DIR/*.tar -C $SLURM_TMPDIR/$NAME_DIR
-tar xzf $DATA_DIR/*.tar.gz -C $SLURM_TMPDIR/$NAME_DIR
+mkdir $RUN_DIR/$NAME_DIR
+tar xf $DATA_DIR/*.tar -C $RUN_DIR/$NAME_DIR
+tar xzf $DATA_DIR/*.tar.gz -C $RUN_DIR/$NAME_DIR
 
 ## make output dir if does not exist
 mkdir $OUT_DIR
@@ -65,13 +67,13 @@ python $SOURCE_DIR/src/experiment/seqbert.py \
     --keep_prop=0.03 \
     --mask_prop=0.1 \
     --random_prop=0.02 \
-    --cls_regularization=1. \
+    --cls_regularization=0.01 \
     --num_workers=4 \
     --print_progress_freq=500 \
     --save_checkpoint_freq=5000 \
-    --seq_file=$SLURM_TMPDIR/$NAME_DIR/data/ref_genome/p12/assembled_chr/GRCh38_p12_assembled_chr.fa \
-    --train_intervals=$SLURM_TMPDIR/$NAME_DIR/data/ref_genome/grch38-train.bed \
-    --valid_intervals=$SLURM_TMPDIR/$NAME_DIR/data/ref_genome/grch38-1M-valid.bed \
+    --seq_file=$RUN_DIR/$NAME_DIR/data/ref_genome/p12/assembled_chr/GRCh38_p12_assembled_chr.fa \
+    --train_intervals=$RUN_DIR/$NAME_DIR/data/ref_genome/grch38-train.bed \
+    --valid_intervals=$RUN_DIR/$NAME_DIR/data/ref_genome/grch38-1M-valid.bed \
     --default_root_dir=$OUT_DIR \
     # --accumulate_grad_batches=1 \
 

@@ -5,6 +5,7 @@ from itertools import chain
 from argparse import ArgumentParser
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import pytorch_lightning as pl
 from pytorch_lightning.core.lightning import LightningModule
 from pytorch_lightning import Trainer, seed_everything
@@ -18,7 +19,7 @@ from seqmodel.functional.transform import INDEX_TO_BASE, Compose, bioseq_to_inde
                             single_split, permute
 from seqmodel.functional.log import prediction_histograms, normalize_histogram, \
                             summarize, correct, accuracy_per_class, accuracy, \
-                            summarize_weights_and_grads
+                            summarize_weights_and_grads, tensor_stats_str
 
 
 # from https://github.com/PyTorchLightning/pytorch-lightning/issues/2534
@@ -49,15 +50,24 @@ class CheckpointEveryNSteps(pl.Callback):
     def on_batch_end(self, trainer: pl.Trainer, _):
         """ Check if we should save a checkpoint after every train batch """
         epoch = trainer.current_epoch
-        global_step = trainer.global_step
-        if global_step % self.save_step_frequency == 0:
+        total_batch_idx = trainer.total_batch_idx
+        if total_batch_idx % self.save_step_frequency == 0:
             if self.use_modelcheckpoint_filename:
                 filename = trainer.checkpoint_callback.filename
             else:
-                filename = "{}_{}_{}.ckpt".format(self.prefix, epoch, global_step)
+                filename = "{}_{}_{}.ckpt".format(self.prefix, epoch, total_batch_idx)
             ckpt_path = os.path.join(trainer.checkpoint_callback.dirpath, filename)
             print("Saving to", ckpt_path)
             trainer.save_checkpoint(ckpt_path)
+
+
+class PrintGradients(pl.Callback):
+    def __init__(self):
+        print('zero grad callback loaded')
+
+    def on_before_zero_grad(self, *args, **kwargs):
+        print('zero grad callback')
+        print(args, kwargs)
 
 
 class SeqBERT(LightningModule):
@@ -104,6 +114,7 @@ class SeqBERT(LightningModule):
         self.loss_fn = nn.CrossEntropyLoss()
         self.cls_loss_fn = nn.CrossEntropyLoss()
         self.mask_props = (self.hparams.mask_prop, self.hparams.random_prop, self.hparams.keep_prop)
+        self.prev_loss = 10000.
 
     def configure_optimizers(self):
         return torch.optim.Adam(chain(self.embedding.parameters(), self.transformer.parameters(),
@@ -168,7 +179,8 @@ class SeqBERT(LightningModule):
         source, target, mask = self.mask_transform(target)
         # input dims are (batch, seq), embedding adds channel dim to end
         # swap dimensions from (batch, seq, channel) to (seq, batch, channel)
-        latent = self.transformer(self.embedding(source).permute(1, 0, 2))
+        embedded = self.embedding(source).permute(1, 0, 2)
+        latent = self.transformer(embedded)
         # swap dimensions from (seq, batch, channel) to (batch, channels, seq_len)
         predicted = self.decoder(latent.permute(1, 2, 0))
         masked_predict_loss = self.loss_fn(mask_select(predicted, mask != self.NO_LOSS_INDEX),
@@ -176,7 +188,7 @@ class SeqBERT(LightningModule):
         # apply classification loss separately
         cls_loss = self.loss_fn(predicted[:,:, 0], target[:, 0])
         loss = masked_predict_loss + self.hparams.cls_regularization * cls_loss
-        return loss, masked_predict_loss, cls_loss, predicted, latent, source, target, mask
+        return loss, masked_predict_loss, cls_loss, predicted, latent, source, target, mask, embedded
 
     def forward(self, batch):
         x, (seqname, coord) = batch
@@ -189,17 +201,20 @@ class SeqBERT(LightningModule):
 
     def training_step(self, batch, batch_idx):
         x, (seqname, coord) = batch
-        loss, pred_loss, cls_loss, predicted, latent, source, target, mask = self.masked_forward(x)
+        loss, pred_loss, cls_loss, predicted, latent, source, target, mask, embedded = self.masked_forward(x)
         print('pred: %2.4f cls: %2.4f' % (pred_loss.item(), cls_loss.item()))
-        print(summarize_weights_and_grads({'embedding': self.embedding, 'transformer': self.transformer,
-                'decoder': self.decoder}, include_grad=False, threshold_trigger=10.))
+        # if batch_idx > 1000 and loss > 2.2:
+        #     print(loss, self.prev_loss)
+        #     self.print_progress(loss, predicted, latent, source, target, mask, embedded, seqname, coord, include_grad=True)
+        #     raise Exception("loss delta exceeded")
+        self.prev_loss = loss.item()
         if batch_idx % self.hparams.print_progress_freq == 0:
-            self.print_progress(predicted, latent, source, target, mask, seqname, coord)
+            self.print_progress(loss, predicted, latent, source, target, mask, embedded, seqname, coord, include_grad=True)
         return {'loss': loss, #'seqname': seqname[-1], 'coord': coord[-1],
                 'log': {'train_loss': loss,} #'seqname': seqname[-1], 'coord': coord[-1],},
                 }
 
-    def print_progress(self, predicted, latent, source, target, mask, seqname, coord):
+    def print_progress(self, loss, predicted, latent, source, target, mask, embedded, seqname, coord, include_grad=False):
         str_train_sample = summarize(
             mask + len(self.tokens),
             source,
@@ -207,6 +222,12 @@ class SeqBERT(LightningModule):
             correct(predicted, target),
             predicted.permute(1, 0, 2),
             index_symbols=self.tokens + [' ', '_', '?', '='])
+
+        # if include_grad:
+        #     loss.backward(retain_graph=True)
+        #     self.optimizers().step()
+        # print(summarize_weights_and_grads({'embedding': self.embedding, 'transformer': self.transformer,
+        #         'decoder': self.decoder}, include_grad=False, threshold_trigger=0.))
         hist = prediction_histograms(predicted.detach().cpu(), target.detach().cpu(), n_bins=5)
         acc = normalize_histogram(hist)
         acc_numbers = accuracy_per_class(hist, threshold_prob=1. / len(self.tokens))
@@ -215,11 +236,20 @@ class SeqBERT(LightningModule):
         print(seqname[0], coord[0], cls_acc, acc_numbers)
         print(str_acc, str_train_sample, sep='\n')
 
+        embedded_vector_lengths = torch.norm(embedded, dim=2)  # vector length along channel dim
+        latent_vector_lengths = torch.norm(latent, dim=2)  # vector length along channel dim
+        embed_reshape = embedded.reshape(-1, embedded.shape[2])
+        latent_reshape = latent.reshape(-1, latent.shape[2])
+        embedded_pairwise_dist = F.pairwise_distance(embed_reshape[:, :-1], embed_reshape[:, 1:])
+        latent_pairwise_dist = F.pairwise_distance(latent_reshape[:, :-1], latent_reshape[:, 1:])
+        print('embedding/latent', tensor_stats_str(
+            embedded_vector_lengths, embedded_pairwise_dist, latent_vector_lengths, latent_pairwise_dist))
+
     def validation_step(self, batch, batch_idx):
         x, (seqname, coord) = batch
-        loss, pred_loss, cls_loss, predicted, latent, source, target, mask = self.masked_forward(x)
+        loss, pred_loss, cls_loss, predicted, latent, source, target, mask, embedded = self.masked_forward(x)
         if batch_idx % self.hparams.print_progress_freq == 0:
-            self.print_progress(predicted, latent, source, target, mask, seqname, coord)
+            self.print_progress(loss, predicted, latent, source, target, mask, embedded, seqname, coord)
         return {'loss': loss,
                 'log': {
                     'val_loss': loss,
@@ -262,6 +292,7 @@ class SeqBERT(LightningModule):
         parser.add_argument('--seq_len', default=500, type=int)
         parser.add_argument('--print_progress_freq', default=1000, type=int)
         parser.add_argument('--save_checkpoint_freq', default=1000, type=int)
+        parser.add_argument('--load_checkpoint_path', default=None, type=str)
         parser.add_argument('--DEBUG_use_random_data', default=False, type=bool)
         parser.add_argument('--DEBUG_random_repeat_len', default=1, type=int)
         parser.add_argument('--DEBUG_random_n_repeats', default=500, type=int)
@@ -280,7 +311,10 @@ def main():
     seed_everything(0)
     print(args)
     model = SeqBERT(**vars(args))
-    args.callbacks = [CheckpointEveryNSteps(args.save_checkpoint_freq)]
+    if args.load_checkpoint_path is not None:
+        model = SeqBERT.load_from_checkpoint(args.load_checkpoint_path, seq_file=args.seq_file,
+                    train_intervals=args.train_intervals, valid_intervals=args.valid_intervals)
+    args.callbacks = [CheckpointEveryNSteps(args.save_checkpoint_freq), PrintGradients()]
     trainer = Trainer.from_argparse_args(args)
     trainer.fit(model)
 
