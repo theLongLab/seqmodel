@@ -19,7 +19,7 @@ NAME_DIR=seqmodel-seqbert-bp
 ## source and data from here
 SOURCE_DIR=~/proj/$NAME_DIR
 ## data archives (archived): use ~/scratch/data for short term, ~/data for long term data
-DATA_DIR=~/scratch/$NAME_DIR/data
+DATA_DIR=~/data/$NAME_DIR/
 ## outputs to here: use ~/scratch/out for short term, ~/out for long term data
 OUT_DIR=~/scratch/$NAME_DIR
 ## this is for fast disk access
@@ -33,7 +33,7 @@ module load nixpkgs/16.09  gcc/7.3.0 cuda/10.1 cudnn/7.6.5 python/3.7.4
 ## compute canada only uses virtualenv and pip
 ## do not use conda as conda will write files to home directory
 virtualenv --no-download $SLURM_TMPDIR/env
-source $SLURM_TMPDIR/env/bin/activate
+source $RUN_DIR/env/bin/activate
 
 ## install project dependencies
 pip install --no-index --upgrade pip
@@ -61,7 +61,7 @@ python $SOURCE_DIR/src/experiment/seqbert.py \
     --feedforward_dims=1024 \
     --position_embedding=Sinusoidal \
     --batch_size=32 \
-    --learning_rate=3e-4 \
+    --learning_rate=1e-4 \
     --seq_len=1000 \
     --dropout=0.0 \
     --keep_prop=0.03 \
@@ -75,6 +75,8 @@ python $SOURCE_DIR/src/experiment/seqbert.py \
     --train_intervals=$RUN_DIR/$NAME_DIR/data/ref_genome/grch38-train.bed \
     --valid_intervals=$RUN_DIR/$NAME_DIR/data/ref_genome/grch38-1M-valid.bed \
     --default_root_dir=$OUT_DIR \
+    --load_checkpoint_path=$OUT_DIR/lightning_logs/version_55300997/checkpoints/N-Step-Checkpoint_0_170000.ckpt \
+
     # --accumulate_grad_batches=1 \
 
 ## clean up by stopping virtualenv
