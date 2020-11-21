@@ -1,6 +1,6 @@
 #!/bin/bash
 
-python src/experiment/seqbert.py \
+python src/exp/seqbert/pretrain.py \
     --n_dims=512 \
     --n_heads=8 \
     --n_layers=8 \
