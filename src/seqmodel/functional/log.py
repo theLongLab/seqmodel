@@ -66,8 +66,10 @@ def accuracy_per_class(histogram, threshold_prob=0.5):
 # assumes binary values in target
 def roc_auc(predicted, target):
     # split by true pos/neg, sort by predicted score
-    positive, _ = torch.sort(torch.masked_select(predicted, (target == 1)), descending=True).detach().cpu()
-    negative, _ = torch.sort(torch.masked_select(predicted, (target == 0)), descending=True).detach().cpu()
+    positive, _ = torch.sort(torch.masked_select(predicted, (target == 1)), descending=True)
+    negative, _ = torch.sort(torch.masked_select(predicted, (target == 0)), descending=True)
+    positive = positive.detach().cpu()
+    negative = negative.detach().cpu()
     n_pos = positive.nelement()
     n_neg = negative.nelement()
     positive = torch.cat([positive, torch.zeros([1])])  # need extra 0 at end

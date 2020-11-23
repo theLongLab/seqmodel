@@ -44,8 +44,8 @@ class FineTuneDeepSEA(LightningModule):
         self.loss_fn = nn.BCEWithLogitsLoss()
 
     def load_pretrained_model(self, seqbert_obj):
-        self.encoder = seqbert_obj.encoder
-        self.transformer = seqbert_obj.transformer
+        self.model.embedding = seqbert_obj.model.embedding
+        self.model.transformer = seqbert_obj.model.transformer
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.model.parameters(), lr=self.hparams.learning_rate)
@@ -76,7 +76,7 @@ class FineTuneDeepSEA(LightningModule):
                 }
 
     def print_progress(self, predicted, target, x):
-        print('roc', roc_auc(predicted, target))
+        print('roc', roc_auc(torch.sigmoid(predicted.squeeze()), target))
 
     def validation_step(self, batch, batch_idx):
         x, target = batch
@@ -143,8 +143,8 @@ def main():
         model = FineTuneDeepSEA.load_from_checkpoint(args.load_checkpoint_path, **vars(args))
     elif args.load_pretrained_model is not None:
         model = FineTuneDeepSEA(**vars(args))
-        pretrained = SeqBERT.load_from_checkpoint(args.load_checkpoint_path)
-        model.load_pretrained_model(pretrained)
+        pretrained = Pretrain.load_from_checkpoint(args.load_pretrained_model)
+        model.load_pretrained_model(pretrained.model)
     else:
         model = FineTuneDeepSEA(**vars(args))
     args.callbacks = [CheckpointEveryNSteps(args.save_checkpoint_freq), PrintGradients()]

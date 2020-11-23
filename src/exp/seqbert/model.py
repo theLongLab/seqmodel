@@ -38,17 +38,16 @@ class SeqBERT(nn.Module):
         self.transformer = nn.TransformerEncoder(
                 nn.TransformerEncoderLayer(hparams['n_dims'], hparams['n_heads'],
                                     hparams['feedforward_dims'], hparams['dropout']),
-                hparams['n_layers'])
+                                    hparams['n_layers'])
 
-        if hparams['n_class'] <= 0:
-            n_class = len(self.tokens)
-        else:
+        n_class = len(self.tokens)  # number of classes to decode to
+        if 'n_class' in hparams and hparams['n_class'] > 0:
             n_class = hparams['n_class']
         self.decoder = SeqFeedForward(hparams['n_dims'], n_class,
                         hidden_layers=hparams['n_decode_layers'] - 1, activation_fn=nn.ReLU)
 
-        self.classify_only = False
-        if hparams['mode'] == 'classify':  # whether to decode all positions or only first one
+        self.classify_only = False  # whether to decode all positions or only first one
+        if ('mode' in hparams) and hparams['mode'] == 'classify':
             self.classify_only = True
 
     def forward(self, x):

@@ -60,7 +60,7 @@ python src/exp/seqbert/finetune-deepsea.py \
     --train_mat=$SLURM_TMPDIR/$NAME_DIR/data/deepsea/train.mat \
     --valid_mat=$SLURM_TMPDIR/$NAME_DIR/data/deepsea/valid.mat \
     --test_mat=$SLURM_TMPDIR/$NAME_DIR/data/deepsea/test.mat \
-    --load_pretrained_model=~/scratch/seqmodel-seqbert-bp/lightning_logs/version_55300997/checkpoints/N-Step-Checkpoint_0_170000.ckpt \
+    --load_pretrained_model=~/scratch/seqmodel-seqbert-bp/lightning_logs/version_55300997/checkpoints/N-Step-Checkpoint_0_170000-fixed.ckpt \
 
     # --accumulate_grad_batches=1 \
 
