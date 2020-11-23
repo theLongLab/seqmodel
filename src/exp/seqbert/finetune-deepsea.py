@@ -23,7 +23,6 @@ class MatFileDataset(IterableDataset):
 
     def __iter__(self):
         for _ in range(self.sampler.n_samples):
-            print(self.batch_size)
             batch, _ = self.sampler.get_data_and_targets(self.batch_size, n_samples=self.batch_size)
             seq, target = batch[0]
             # swap dimensions from (batch, seq, channel) to the usual (batch, channel, seq)
@@ -44,8 +43,8 @@ class FineTuneDeepSEA(LightningModule):
         self.loss_fn = nn.BCEWithLogitsLoss()
 
     def load_pretrained_model(self, seqbert_obj):
-        self.model.embedding = seqbert_obj.model.embedding
-        self.model.transformer = seqbert_obj.model.transformer
+        self.model.embedding = seqbert_obj.embedding
+        self.model.transformer = seqbert_obj.transformer
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.model.parameters(), lr=self.hparams.learning_rate)
