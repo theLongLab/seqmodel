@@ -26,7 +26,7 @@ class Test_Mapseq(unittest.TestCase):
         seq_len = 10
         data = RandomRepeatSequence(seq_len, self.length, 3, repeat_len=1)
         self.assertEqual(len(data), self.length)
-        batch = data[0]
+        batch = data[0][0]
         self.assertEqual(len(batch), seq_len)
         self.assertEqual(batch[0], batch[1], batch[2])
         data = RandomRepeatSequence(seq_len, self.length, 2, repeat_len=2)

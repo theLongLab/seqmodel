@@ -76,7 +76,7 @@ class RandomRepeatSequence(torch.utils.data.Dataset):
 # quickly create a batch for testing purposes
 def create_test_batch(batch_size, seq_len):
     dataset = RandomRepeatSequence(seq_len, batch_size, 2, repeat_len=2)
-    return torch.stack([dataset[i] for i in range(batch_size)], dim=0)
+    return torch.stack([dataset[i][0] for i in range(batch_size)], dim=0)
 
 
 # class LabelledSequence(torch.utils.data.Dataset):

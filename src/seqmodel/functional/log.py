@@ -63,6 +63,29 @@ def accuracy_per_class(histogram, threshold_prob=0.5):
     sums = torch.sum(histogram[:, :, cutoff_bin:], dim=2, keepdim=True)
     return torch.squeeze(normalize_histogram(sums, weights=histogram)[1,:,:])
 
+# assumes binary values in target
+def roc_auc(predicted, target):
+    # split by true pos/neg, sort by predicted score
+    positive, _ = torch.sort(torch.masked_select(predicted, (target == 1)), descending=True).detach().cpu()
+    negative, _ = torch.sort(torch.masked_select(predicted, (target == 0)), descending=True).detach().cpu()
+    n_pos = positive.nelement()
+    n_neg = negative.nelement()
+    positive = torch.cat([positive, torch.zeros([1])])  # need extra 0 at end
+    negative = torch.cat([negative, torch.zeros([1])])
+    if n_pos == 0 or n_neg == 0:
+        return 0.  # ROC is not meaningful if there aren't both positive and negative elements
+    # numerically integrate by stepping from lowest to highest scores (rectangular sum)
+    area = 0.
+    i, j = 0, 0
+    for _ in range(n_neg + n_pos):
+        if positive[i] >= negative[j]:  # step up (true positive)
+            i += 1
+        else:  # step right (false positive)
+            area += i  # i is height of rectangle
+            j += 1
+    # normalize by total number of pos/neg to get ratios
+    return area / (n_neg * n_pos)
+
 def broadcastable_dims(*tensors):
     n_dims = [len(t.shape) for t in tensors]
     dims = tensors[n_dims.index(max(n_dims))].shape  # tensor with most dims

@@ -8,6 +8,7 @@ from pytorch_lightning.core.lightning import LightningModule
 from pytorch_lightning import Trainer, seed_everything
 
 from seqmodel.functional.transform import one_hot_to_index
+from seqmodel.functional.log import roc_auc
 from selene.mat_file_sampler import MatFileSampler
 from exp.seqbert.model import SeqBERT, CheckpointEveryNSteps, PrintGradients
 from exp.seqbert.pretrain import Pretrain
@@ -31,7 +32,7 @@ class MatFileDataset(IterableDataset):
             target = torch.tensor(target, dtype=torch.float)
             cls_tokens = torch.zeros([seq.shape[0], 1], dtype=torch.long) + self.cls_token
             seq = torch.cat([cls_tokens, seq], dim=1)
-            yield seq, target
+            yield seq, target  # (batch, seq, channel) and (batch, channel)
 
 
 class FineTuneDeepSEA(LightningModule):
@@ -75,14 +76,7 @@ class FineTuneDeepSEA(LightningModule):
                 }
 
     def print_progress(self, predicted, target, x):
-        pass
-        # str_train_sample = summarize(self.mask.mask_val + 4, x, correct(predicted, x_in),
-        #         predicted.permute(1, 0, 2), index_symbols=INDEX_TO_BASE + [' ', '_', '?', '='])
-        # hist = prediction_histograms(predicted.detach().cpu(), x_in.detach().cpu(), n_bins=5)
-        # acc = normalize_histogram(hist)
-        # acc_numbers = accuracy_per_class(hist, threshold_prob=0.5)
-        # str_acc = summarize(acc, col_labels=INDEX_TO_BASE, normalize_fn=None)
-        # print(acc_numbers, str_acc, str_train_sample, sep='\n')
+        print('roc', roc_auc(predicted, target))
 
     def validation_step(self, batch, batch_idx):
         x, target = batch

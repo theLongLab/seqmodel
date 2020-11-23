@@ -10,7 +10,7 @@
                                                           # %j gets replaced by the job number
 
 ## project name
-NAME_DIR=seqmodel-seqbert-bp
+NAME_DIR=seqmodel-seqbert-ft
 
 ## on compute canada, scratch dir is for short term and home dir is for long term
 ## note: code below assumes scratch has been linked to home directory
@@ -28,7 +28,7 @@ source $SLURM_TMPDIR/env/bin/activate
 
 ## install project dependencies
 pip install --no-index --upgrade pip
-pip install --no-index -r ~/proj/$NAME_DIR/requirements.txt
+pip install --no-index -r ./requirements.txt
 ## these dependencies need to be downloaded
 pip install pyfaidx pytorch-lightning
 
@@ -36,7 +36,6 @@ pip install pyfaidx pytorch-lightning
 ## compute canada guidelines say to keep files archived to reduce disk utilization
 ## when accessing data, use `$SLURM_TMPDIR` which is fastest storage directly attached to compute nodes
 mkdir $SLURM_TMPDIR/$NAME_DIR
-tar xf ~/data/$NAME_DIR/*.tar -C $SLURM_TMPDIR/$NAME_DIR
 tar xzf ~/data/$NAME_DIR/*.tar.gz -C $SLURM_TMPDIR/$NAME_DIR
 
 ## make output dir if does not exist
@@ -54,15 +53,14 @@ python src/exp/seqbert/finetune-deepsea.py \
     --batch_size=32 \
     --learning_rate=3e-4 \
     --seq_len=1000 \
-    --default_root_dir=~/scratch/$NAME_DIR/ft \
+    --default_root_dir=~/scratch/$NAME_DIR \
     --accumulate_grad_batches=1 \
     --print_progress_freq=500 \
     --save_checkpoint_freq=5000 \
     --train_mat=$SLURM_TMPDIR/$NAME_DIR/data/deepsea/train.mat \
     --valid_mat=$SLURM_TMPDIR/$NAME_DIR/data/deepsea/valid.mat \
     --test_mat=$SLURM_TMPDIR/$NAME_DIR/data/deepsea/test.mat \
-
-    # --load_pretrained_model=~/scratch/$NAME_DIR/lightning_logs/version_55300997/checkpoints/N-Step-Checkpoint_0_170000.ckpt \
+    --load_pretrained_model=~/scratch/seqmodel-seqbert-bp/lightning_logs/version_55300997/checkpoints/N-Step-Checkpoint_0_170000.ckpt \
 
     # --accumulate_grad_batches=1 \
 

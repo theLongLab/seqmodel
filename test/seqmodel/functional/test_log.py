@@ -65,6 +65,22 @@ class Test_Conv(unittest.TestCase):
         npt.assert_array_equal(accuracy_per_class(hist, threshold_prob=0.), [0., 1., 0., 0.])
         npt.assert_array_equal(accuracy_per_class(hist, threshold_prob=0.5), [0., 0., 0., 0.])
 
+    def test_roc_auc(self):
+        n_samples = 1000
+        x = torch.zeros(n_samples)
+        y = torch.ones(n_samples)
+        self.assertEqual(roc_auc(x, y), 0.)
+        y = torch.zeros(n_samples)
+        self.assertEqual(roc_auc(x, y), 0.)
+        x = torch.ones(n_samples)
+        y = torch.cat([torch.zeros(n_samples // 2), torch.ones(n_samples - n_samples // 2)])
+        x = torch.rand(n_samples)
+        self.assertAlmostEqual(roc_auc(x, y), 0.5, places=1)
+        y = (x > 0.5).to(torch.int)
+        self.assertEqual(roc_auc(x, y), 1.)
+        y = 1 - y
+        self.assertEqual(roc_auc(x, y), 0.)
+
     def test_excerpt(self):
         x = torch.arange(10)
         y = excerpt(x, max_sizes=[5])[0]
