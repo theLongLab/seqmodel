@@ -83,6 +83,7 @@ class FineTuneDeepSEA(LightningModule):
         # remove dim 2 (seq) from predicted
         loss = self.loss_fn(predicted.squeeze(), target)
         if batch_idx % self.hparams.print_progress_freq == 0:
+            print('Validation')
             self.print_progress(predicted, target, x)
         return {'loss': loss,
                 'log': {

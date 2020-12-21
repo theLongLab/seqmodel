@@ -6,6 +6,7 @@ import pandas as pd
 import torch
 from pyfaidx import Fasta
 from torch.utils.data import IterableDataset
+from seqmodel.functional.transform import do_nothing
 
 
 def bed_from_file(bed_filename):
@@ -75,13 +76,21 @@ class StridedSequence(IterableDataset):
     """
         sequential: if True, this is equivalent to setting stride=1 and start_offset=0
     """
-    def __init__(self, sequence_data, seq_len, include_intervals=None,
+    def __init__(self,
+                sequence_data,
+                seq_len,
+                include_intervals=None,
                 transforms=torch.nn.Identity(),
-                sequential=False, stride=None, start_offset=None):
+                label_transforms=do_nothing,
+                sequential=False,
+                stride=None,
+                start_offset=None):
+
         self.sequence_data = sequence_data
         self.seq_len = seq_len
         self._cutoff = self.seq_len - 1
         self.transforms = transforms
+        self.label_transforms = label_transforms
         self.include_intervals = include_intervals
         if self.include_intervals is None:  # use entire sequence
             self.include_intervals = self.sequence_data.all_intervals()
@@ -146,4 +155,4 @@ class StridedSequence(IterableDataset):
         for i in range(self._iter_start, self._iter_end):
             key, coord = self.index_to_coord(i)
             seq = self.sequence_data.get(key, coord, coord + self.seq_len)
-            yield self.transforms(seq), (key, coord)
+            yield self.transforms(seq), self.label_transforms(key, coord)

@@ -96,6 +96,9 @@ def swap(x, dim=1):
     a, b = torch.split(x, x.shape[dim] // 2, dim=dim)
     return torch.cat([b, a], dim=dim)
 
+def do_nothing(*args):
+    return args
+
 # composes multiple functions together
 class Compose(nn.Module):
 
