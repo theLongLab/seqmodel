@@ -74,7 +74,22 @@ class FastaFile(SequentialData):
 class StridedSequence(IterableDataset):
 
     """
-        sequential: if True, this is equivalent to setting stride=1 and start_offset=0
+        sequence_data: any object implementing SequentialData interface
+        seq_len: length of sequence to return
+        include_intervals: sequence intervals to sample from, in the form
+            `{'seqname': [list<str>], 'start': [list<int>], 'end': [list<int>]}`.
+            If `include_intervals=None`, sample from all sequence data.
+        transforms: function applied to sequence output (type depends on SequentialData object)
+        label_transforms: function applied to tuple of (key, coord) for sequence
+        sequential: if `True`, this is equivalent to setting `stride=1` and `start_offset=0`
+        stride: how many indices to move between samples. Defaults to nearest power of 2
+            to square root of total sequence positions
+        start_offset: first index to sample from. Defaults to random value.
+        sample_freq: how often to sample. Defaults to 1 (every position is start of a sample).
+            To have non-overlapping samples, set equal to `seq_len`.
+        min_len: controls length of the last sample in each interval.
+            If `None`, only return sequences of `seq_len`,
+            Otherwise, return sequences of length up to and including `min_len`.
     """
     def __init__(self,
                 sequence_data,
@@ -84,17 +99,32 @@ class StridedSequence(IterableDataset):
                 label_transforms=do_nothing,
                 sequential=False,
                 stride=None,
-                start_offset=None):
+                start_offset=None,
+                sample_freq=1,
+                min_len=None):
 
         self.sequence_data = sequence_data
         self.seq_len = seq_len
-        self._cutoff = self.seq_len - 1
         self.transforms = transforms
         self.label_transforms = label_transforms
         self.include_intervals = include_intervals
+        self.sample_freq = sample_freq
         if self.include_intervals is None:  # use entire sequence
             self.include_intervals = self.sequence_data.all_intervals()
-        self._gen_interval_table(self.include_intervals)
+
+        self.min_len = min_len
+        if min_len is None:
+            self.min_len = self.seq_len
+
+        # if length is negative, remove interval (set length to 0)
+        n_samples = [max(0, (y - x - self.min_len + self.sample_freq) // self.sample_freq)
+                    for x, y in zip(self.include_intervals['start'], self.include_intervals['end'])]
+        self.keys = self.include_intervals['seqname']
+        self.coord_offsets = list(self.include_intervals['start'])
+        self.last_indexes = np.cumsum(n_samples)
+        self.n_seq = np.sum(n_samples)    # number of sample indices
+        self._iter_start = 0            # worker start index
+        self._iter_end = self.n_seq     # worker end index
 
         if sequential:  # return sequences in order from beginning
             self.stride = 1
@@ -104,28 +134,17 @@ class StridedSequence(IterableDataset):
                 # make sure total positions is odd (this guarantees stride covers all positions)
                 if self.n_seq % 2 == 0:
                     self.n_seq -= 1
-                # nearest power of 2 to square root of self.n_seq, this gives nicely spaced positions
+                # nearest power of 2 to square root of self.n_seq, this gives reasonably spaced positions
                 self.stride = 2 ** int(round(log(sqrt(self.n_seq), 2)))
             else:
                 self.stride = stride
-            # randomly assign start position (this will be different for each dataloader worker)
+            # randomly assign start position
             if start_offset is None:
                 self.start_offset = torch.randint(self.n_seq, [1]).item()
             else:
                 self.start_offset = start_offset
 
-    def _gen_interval_table(self, include_intervals):
-        # if length is negative, remove interval (set length to 0)
-        lengths = [max(0, y - x - self._cutoff)
-                    for x, y in zip(include_intervals['start'], include_intervals['end'])]
-        self.keys = include_intervals['seqname']
-        self.coord_offsets = list(include_intervals['start'])
-        self.n_seq = np.sum(lengths)
-        self.last_indexes = np.cumsum(lengths)
-        self._iter_start = 0
-        self._iter_end = self.n_seq
-
-    @staticmethod
+    @staticmethod  # partition total indices among workers
     def _worker_init_fn(worker_id):
         worker_info = torch.utils.data.get_worker_info()
         dataset = worker_info.dataset
@@ -133,10 +152,19 @@ class StridedSequence(IterableDataset):
         n_per_worker = int(ceil(dataset.n_seq / worker_info.num_workers))
         dataset._iter_start = n_per_worker * worker_info.id  # split indexes by worker id
         dataset._iter_end = min(dataset._iter_start + n_per_worker, dataset.n_seq)
+        print(worker_id, worker_info, dataset._iter_start, dataset._iter_end)
 
-    def get_data_loader(self, batch_size, num_workers):
-        return torch.utils.data.DataLoader(self, batch_size=batch_size, shuffle=False,
-                        num_workers=num_workers, worker_init_fn=self._worker_init_fn)
+    def get_data_loader(self, batch_size, num_workers, collate_fn=None):
+        return torch.utils.data.DataLoader(self,
+                batch_size=batch_size,
+                shuffle=False,              # load sequentially
+                num_workers=num_workers,
+                collate_fn=collate_fn,      # optional function to preprocess batch
+                pin_memory=True,  # pinned memory transfers faster to CUDA
+                worker_init_fn=self._worker_init_fn,  # initialize multithread workers
+                    # prefetch one batch, this doesn't work for torch < 1.7
+                # prefetch_factor=(batch_size // num_workers),
+            )
 
     def index_to_coord(self, i):
         index = (i * self.stride + self.start_offset) % self.n_seq
@@ -144,11 +172,9 @@ class StridedSequence(IterableDataset):
         row = np.searchsorted(self.last_indexes, index, side='right')
         # look up sequence name and genomic coordinate from interval table
         key = self.keys[row]
-        if row == 0:  # need to find index relative to start of interval
-            index_offset = 0
-        else:
-            index_offset = self.last_indexes[row - 1]
-        coord =  self.coord_offsets[row] + index - index_offset
+        if row > 0:  # need to find index relative to start of interval
+            index -= self.last_indexes[row - 1]
+        coord =  self.coord_offsets[row] + (index * self.sample_freq)  # convert to coord
         return key, coord
 
     def __iter__(self):

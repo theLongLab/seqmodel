@@ -63,5 +63,38 @@ class Test_StridedSeq(unittest.TestCase):
             self.assertFalse(i == 'N')
             break
 
+    def test_StridedSequence_freq(self):
+        dataset = StridedSequence(self.fasta, 10, sequential=True, sample_freq=10)
+        data = [x[0] for x in dataset]
+        self.assertEqual(len(data), 5)
+        npt.assert_array_equal(data[0], self.seqs[0][:10])
+        npt.assert_array_equal(data[-1], self.seqs[1][-10:])
+
+        dataset = StridedSequence(self.fasta, 1, sequential=True, sample_freq=5)
+        data = [x[0] for x in dataset]
+        self.assertEqual(len(data), 10)
+        npt.assert_array_equal(data[0], self.seqs[0][:1])
+        npt.assert_array_equal(data[1], self.seqs[0][5:6])
+
+        dataset = StridedSequence(self.fasta, 10, sequential=True, sample_freq=7)
+        data = [x[0] for x in dataset]
+        self.assertEqual(len(data), 5)
+        npt.assert_array_equal(data[0], self.seqs[0][:10])
+        npt.assert_array_equal(data[1], self.seqs[0][7:17])
+        npt.assert_array_equal(data[2], self.seqs[0][14:24])
+        npt.assert_array_equal(data[3], self.seqs[1][:10])
+        npt.assert_array_equal(data[4], self.seqs[1][7:17])
+
+        dataset = StridedSequence(self.fasta, 10, sequential=True, sample_freq=7, min_len=9)
+        data = [x[0] for x in dataset]
+        self.assertEqual(len(data), 6)
+        npt.assert_array_equal(data[3], self.seqs[0][21:30])
+
+        dataset = StridedSequence(self.fasta, 10, sequential=True, sample_freq=7, min_len=6)
+        data = [x[0] for x in dataset]
+        self.assertEqual(len(data), 7)
+        npt.assert_array_equal(data[-1], self.seqs[1][14:20])
+
+
 if __name__ == '__main__':
     unittest.main()
