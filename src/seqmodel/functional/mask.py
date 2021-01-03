@@ -72,10 +72,3 @@ def mask_select(x, bool_mask):
                 bool_mask).reshape(n_classes, -1).permute(1, 0)
     else:
         return x.masked_select(bool_mask)
-
-
-class NextTokenMask():
-
-    def __init__(self):
-        pass
-

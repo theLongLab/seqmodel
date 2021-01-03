@@ -79,8 +79,8 @@ class StridedSequence(IterableDataset):
         include_intervals: sequence intervals to sample from, in the form
             `{'seqname': [list<str>], 'start': [list<int>], 'end': [list<int>]}`.
             If `include_intervals=None`, sample from all sequence data.
-        transforms: function applied to sequence output (type depends on SequentialData object)
-        label_transforms: function applied to tuple of (key, coord) for sequence
+        transform: function applied to sequence output (type depends on SequentialData object)
+        label_transform: function applied to tuple of (key, coord) for sequence
         sequential: if `True`, this is equivalent to setting `stride=1` and `start_offset=0`
         stride: how many indices to move between samples. Defaults to nearest power of 2
             to square root of total sequence positions
@@ -95,8 +95,8 @@ class StridedSequence(IterableDataset):
                 sequence_data,
                 seq_len,
                 include_intervals=None,
-                transforms=torch.nn.Identity(),
-                label_transforms=do_nothing,
+                transform=torch.nn.Identity(),
+                label_transform=do_nothing,
                 sequential=False,
                 stride=None,
                 start_offset=None,
@@ -105,8 +105,8 @@ class StridedSequence(IterableDataset):
 
         self.sequence_data = sequence_data
         self.seq_len = seq_len
-        self.transforms = transforms
-        self.label_transforms = label_transforms
+        self.transform = transform
+        self.label_transform = label_transform
         self.include_intervals = include_intervals
         self.sample_freq = sample_freq
         if self.include_intervals is None:  # use entire sequence
@@ -152,7 +152,6 @@ class StridedSequence(IterableDataset):
         n_per_worker = int(ceil(dataset.n_seq / worker_info.num_workers))
         dataset._iter_start = n_per_worker * worker_info.id  # split indexes by worker id
         dataset._iter_end = min(dataset._iter_start + n_per_worker, dataset.n_seq)
-        print(worker_id, worker_info, dataset._iter_start, dataset._iter_end)
 
     def get_data_loader(self, batch_size, num_workers, collate_fn=None):
         return torch.utils.data.DataLoader(self,
@@ -181,4 +180,4 @@ class StridedSequence(IterableDataset):
         for i in range(self._iter_start, self._iter_end):
             key, coord = self.index_to_coord(i)
             seq = self.sequence_data.get(key, coord, coord + self.seq_len)
-            yield self.transforms(seq), self.label_transforms(key, coord)
+            yield self.transform(seq), self.label_transform(key, coord)

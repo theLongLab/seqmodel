@@ -41,20 +41,9 @@ def flank(seq, start_flank=None, end_flank=None):
     return torch.cat([start_flank, seq, end_flank], dim=0)
 
 #assumes batch x length sequence
-#split batch along at length * prop position
-def single_split(batch, prop=0.5):
-    with torch.no_grad():
-        length = batch.shape[1]
-        len_first = int(length * prop)
-        len_last = length - len_first
-        assert len_first > 0 and len_last > 0
-        first, last = torch.split(batch, (len_first, len_last), dim=1)
-        return first, last
-
-#assumes batch x length sequence
 # shuffles prop*batch_n sequences, guarantees they are mapped to new sequences
 # also returns vector indicating which ones are shuffled
-def permute(batch, prop=0.5):
+def permute(batch, prop=1.):
     with torch.no_grad():
         n_batch = batch.shape[0]
         n_perm = int(n_batch * prop)

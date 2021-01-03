@@ -1,12 +1,17 @@
 import sys
 sys.path.append('./src')
 import os.path
+import torch
 import torch.nn as nn
 import pytorch_lightning as pl
 
 from seqmodel.model.conv import SeqFeedForward
 from seqmodel.model.attention import SinusoidalPosition
 from seqmodel.functional.transform import INDEX_TO_BASE
+
+
+def bool_to_tokens(bool_tensor, target_tensor_type=torch.long):
+    return bool_tensor.to(target_tensor_type) + 7  # 'f' token is 0 + 7, so 1 + 7 = 8 is true
 
 
 class SeqBERT(nn.Module):
@@ -17,10 +22,9 @@ class SeqBERT(nn.Module):
         '~',  # 6 classification token (always at start)
         'f',  # 7 output token at classification token position, indicates pretext task false
         't',  # 8 output token indicating pretext task is true
+        '/',  # 9 separator token (between two input sequences)
         ]
-    MASK_TOKEN = 5
-    CLS_TOKEN = 6
-    CLS_OFFSET = 7
+    TOKENS_BP_IDX = {k: v for v, k in enumerate(TOKENS_BP)}  # dict to look up above
 
     def __init__(self, **hparams):
         super().__init__()

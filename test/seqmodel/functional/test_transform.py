@@ -92,14 +92,6 @@ class Test_Transforms(unittest.TestCase):
         npt.assert_array_equal(y[7:-7], x)
         npt.assert_array_equal(y[-7:], end)
 
-    def test_single_split(self):
-        a, b = single_split(self.indexes)
-        npt.assert_array_equal(a, self.indexes[:, :(self.seq_len // 2)])
-        npt.assert_array_equal(b, self.indexes[:, (self.seq_len // 2):])
-        a, b = single_split(self.indexes, prop=0.1)
-        npt.assert_array_equal(a, self.indexes[:, :(self.seq_len // 10)])
-        npt.assert_array_equal(b, self.indexes[:, (self.seq_len // 10):])
-
     def test_permute(self):
         def rows_equal(tensor_1, tensor_2, mask=None):
             if mask is None:
@@ -119,7 +111,7 @@ class Test_Transforms(unittest.TestCase):
         npt.assert_array_equal(is_permuted, torch.ones(self.batches, dtype=torch.bool))
         self.assertFalse(torch.any(rows_equal(x, self.indexes)))
 
-        is_permuted, x = permute(self.indexes)
+        is_permuted, x = permute(self.indexes, prop=0.5)
         self.assertTrue(torch.sum(is_permuted), self.batches // 2)
         is_not_permuted = torch.logical_not(is_permuted)
         self.assertTrue(torch.all(rows_equal(x, self.indexes, mask=is_not_permuted)))

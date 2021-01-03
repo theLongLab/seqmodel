@@ -1,11 +1,11 @@
 #!/bin/bash
 
 python src/exp/seqbert/pretrain.py \
-    --n_dims=512 \
-    --n_heads=8 \
-    --n_layers=8 \
+    --n_dims=256 \
+    --n_heads=2 \
+    --n_layers=2 \
     --n_decode_layers=2 \
-    --feedforward_dims=1024 \
+    --feedforward_dims=512 \
     --dropout=0.0 \
     --position_embedding=Sinusoidal \
     --keep_prop=0.03 \
@@ -15,7 +15,7 @@ python src/exp/seqbert/pretrain.py \
     --num_workers=4 \
     --batch_size=4 \
     --learning_rate=3e-4 \
-    --seq_len=500 \
+    --seq_len=100 \
     --seq_file=data/ref_genome/p12/assembled_chr/GRCh38_p12_assembled_chr.fa \
     --train_intervals=data/ref_genome/grch38-train.bed \
     --valid_intervals=data/ref_genome/grch38-1M-valid.bed \
