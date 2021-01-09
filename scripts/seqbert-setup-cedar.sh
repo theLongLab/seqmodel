@@ -3,7 +3,7 @@
 ## this script compresses everything in `data/**` and sends to remote cluster
 ## the code is assumed to be updated via git
 TARGET=dkwok@cedar.computecanada.ca
-TARGET_DIR=data/seqmodel-seqbert-bp
+TARGET_DIR=data/seqbert-pretrain
 GZ_FILE=grch38-fasta-and-intervals
 
 tar -czvf $GZ_FILE.tar.gz \

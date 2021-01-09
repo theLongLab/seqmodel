@@ -1,16 +1,17 @@
 #!/bin/bash
-#SBATCH --job-name=seqbert-bp
+#SBATCH --job-name=seqbert-ft-biren
 #SBATCH --account=def-quanlong            # needed for resource billing if using compute canada
-#SBATCH --time=12:00:00                           # max walltime in D-HH:MM or HH:MM:SS
+#SBATCH --time=2:00:00                           # max walltime in D-HH:MM or HH:MM:SS
 #SBATCH --cpus-per-task=4             # number of cores
 #SBATCH --gres=gpu:p100:1                 # type and number of GPU(s) per node
 #SBATCH --mem=16000                                       # max memory (default unit is MB) per node
-#SBATCH --output=seqbert-ft-%j.out                 # file name for the output
-#SBATCH --error=seqbert-ft-%j.err                  # file name for errors
+#SBATCH --output=seqbert-ft-biren-%j.out                 # file name for the output
+#SBATCH --error=seqbert-ft-biren-%j.err                  # file name for errors
                                                           # %j gets replaced by the job number
 
 ## project name
-NAME_DIR=seqmodel-seqbert-ft
+NAME_DIR=seqbert-ft-biren
+cd ~/proj/$NAME_DIR
 
 ## on compute canada, scratch dir is for short term and home dir is for long term
 ## note: code below assumes scratch has been linked to home directory
@@ -39,10 +40,10 @@ mkdir $SLURM_TMPDIR/$NAME_DIR
 tar xzf ~/data/$NAME_DIR/*.tar.gz -C $SLURM_TMPDIR/$NAME_DIR
 
 ## make output dir if does not exist
-mkdir ~/scratch/$NAME_DIR/ft
+mkdir ~/scratch/$NAME_DIR
 
 # hparams
-python src/exp/seqbert/finetune-deepsea.py \
+python ./src/exp/seqbert/finetune-biren.py \
     --n_dims=512 \
     --n_heads=4 \
     --n_layers=4 \
@@ -54,14 +55,19 @@ python src/exp/seqbert/finetune-deepsea.py \
     --learning_rate=3e-4 \
     --seq_len=1000 \
     --default_root_dir=~/scratch/$NAME_DIR \
-    --accumulate_grad_batches=1 \
     --print_progress_freq=500 \
     --save_checkpoint_freq=5000 \
-    --train_mat=$SLURM_TMPDIR/$NAME_DIR/data/deepsea/train.mat \
-    --valid_mat=$SLURM_TMPDIR/$NAME_DIR/data/deepsea/valid.mat \
-    --test_mat=$SLURM_TMPDIR/$NAME_DIR/data/deepsea/test.mat \
+    --num_workers=8 \
+    --seq_file=$SLURM_TMPDIR/$NAME_DIR/data/vista/all-enhancers.fa \
+    --train_intervals=$SLURM_TMPDIR/$NAME_DIR/data/vista/human-enhancers-train.bed \
+    --valid_intervals=$SLURM_TMPDIR/$NAME_DIR/data/vista/human-enhancers-valid.bed \
+    --test_intervals=$SLURM_TMPDIR/$NAME_DIR/data/vista/human-enhancers-test.bed \
+    --seq_len_source_multiplier=2. \
+    --crop_factor=0.3 \
+    --seq_len_sample_freq=0.25 \
     --load_pretrained_model=./lightning_logs/version_55349874/checkpoints/fixed-N-Step-Checkpoint_0_260000.ckpt \
 
+    # --load_checkpoint_path='' \
     # --accumulate_grad_batches=1 \
 
 ## clean up by stopping virtualenv

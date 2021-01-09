@@ -84,7 +84,7 @@ class Test_Pretrain(unittest.TestCase):
                                                 2, self.seq_len - 2, 0.5, 0., 0.)
         _, split_seqs = batch_processor.split_shuffle(self.batch)
         target, offsets = batch_processor.rand_subseq(split_seqs)
-        source, mask = batch_processor.mask_transform(target, offsets)
+        source, mask = batch_processor.mask_transform(target)
         npt.assert_array_equal(source[:, 0], SeqBERT.TOKENS_BP_IDX['~'])
         for i, j in enumerate(offsets):
             self.assertEqual(source[i, j], SeqBERT.TOKENS_BP_IDX['/'])
@@ -109,7 +109,6 @@ class Test_Pretrain(unittest.TestCase):
                     self.assertEqual(source[i, j], SeqBERT.TOKENS_BP_IDX['n'])
 
         dataloader = self.dataset.get_data_loader(4, 2, collate_fn=batch_processor.collate)
-        [print(batch) for batch in dataloader]
 
 
 if __name__ == '__main__':

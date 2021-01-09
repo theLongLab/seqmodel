@@ -59,6 +59,36 @@ def permute(batch, prop=1.):
         is_permuted[cycle_x] = True
         return is_permuted, batch.index_select(0, select_indexes)
 
+# random subsequence between min_len and max_len, using last dim
+# if len is less than max_len, crop between min_len and len
+# if either of crop_start or crop_end are False, only crop from one side
+def random_crop(sequence, min_len, max_len, crop_start=True, crop_end=True):
+    assert min_len >= 0 and max_len >= min_len and sequence.size(-1) >= min_len
+    src_len = sequence.size(-1)
+    # target up to and including max_len or seq_len
+    tgt_len = min(src_len, torch.randint(min_len, max_len + 1, [1]).item())
+    if crop_start and crop_end:
+        offset = torch.randint(0, src_len - tgt_len + 1, [1]).item()
+        return sequence[..., offset:offset+tgt_len]
+    elif crop_start:
+        return sequence[..., -tgt_len:]
+    elif crop_end:
+        return sequence[..., :tgt_len]
+    else:
+        return sequence
+
+# randomly position source seq in target, cut source to size if needed
+# in place operation
+def random_seq_fill(source, target):
+    src_len = source.size(-1)
+    tgt_len = target.size(-1)
+    offset = torch.randint(0, abs(src_len - tgt_len) + 1, [1]).item()
+    if src_len > tgt_len:
+        target = source[..., offset:offset + tgt_len]
+    else:
+        target[..., offset:offset + src_len] = source
+    return target
+
 def one_hot(index_sequence, indexes=range(N_BASE), dim=1):
     with torch.no_grad():
         return torch.stack([(index_sequence == i).float() for i in indexes], dim=dim)

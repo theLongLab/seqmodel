@@ -120,6 +120,39 @@ class Test_Transforms(unittest.TestCase):
         npt.assert_array_equal(same, ref)  # double check the above line
         self.assertFalse(torch.any(rows_equal(x, self.indexes, mask=is_permuted)))
 
+    def test_random_crop(self):
+        seq = self.indexes
+        seq_len = seq.size(-1)
+        npt.assert_array_equal(seq, random_crop(seq, seq_len, seq_len))
+        x = random_crop(seq, 0, seq_len // 2, crop_start=False)
+        # print(seq[1,], x[1,], seq.shape, x.shape, seq_len, seq_len // 2)
+        self.assertLessEqual(x.size(-1), seq_len // 2)
+        npt.assert_array_equal(seq[:, :x.size(-1)], x)
+        x = random_crop(seq, 0, seq_len * 2, crop_end=False)
+        self.assertLessEqual(x.size(-1), seq_len)
+        npt.assert_array_equal(seq[:, seq_len - x.size(-1):], x)
+        x = random_crop(seq, seq_len // 3, seq_len - seq_len // 3)
+        self.assertGreaterEqual(x.size(-1), seq_len // 3)
+        self.assertLessEqual(x.size(-1), seq_len - seq_len // 3)
+
+    def test_random_seq_fill(self):
+        source = self.indexes
+        seq_len = source.size(-1)
+        fill_value = 100
+        target = fill_value * torch.ones_like(source)
+        npt.assert_array_equal(source, random_seq_fill(source, target))
+        target = fill_value * torch.ones(source.size(0), seq_len + 1)
+        x = random_seq_fill(source, target)
+        if x[0, 0] == fill_value:
+            npt.assert_array_equal(source, x[..., 1:])
+            npt.assert_array_equal(x[..., 0], fill_value)
+        else:
+            npt.assert_array_equal(source, x[..., :-1])
+            npt.assert_array_equal(x[..., -1], fill_value)
+        target = fill_value * torch.ones(source.size(0), seq_len - 1)
+        x = random_seq_fill(source, target)
+        self.assertTrue(torch.all(x == source[..., 1:]) or torch.all(x == source[..., :-1]))
+
 
 if __name__ == '__main__':
     unittest.main()

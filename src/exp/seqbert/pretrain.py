@@ -65,7 +65,7 @@ class PretrainBatchProcessor():
             target[i, tgt_start:tgt_end] = seq[src_start:src_end]
         return target, sep_offsets
 
-    def mask_transform(self, target, sep_positions):
+    def mask_transform(self, target):
         with torch.no_grad():
             # randomize, mask, or mark for loss calculation some proportion of positions
             mask = generate_mask(target, self.mask_props)
@@ -86,10 +86,10 @@ class PretrainBatchProcessor():
         key, coord = zip(*metadata)
         # shuffle for next sequence prediction task
         cls_targets, split_seqs = self.split_shuffle(torch.stack(sequences, dim=0))
-        target, sep_offsets = self.rand_subseq(split_seqs)
+        target, _ = self.rand_subseq(split_seqs)
         target[:, 0] = cls_targets
         # mask for masked token prediction task
-        source, mask = self.mask_transform(target, sep_offsets)
+        source, mask = self.mask_transform(target)
         return (source, target, mask), (key, torch.tensor(coord))  # send this to GPU
 
 
