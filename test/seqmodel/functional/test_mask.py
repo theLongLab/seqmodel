@@ -58,8 +58,9 @@ class Test_PositionMask(unittest.TestCase):
 
     def test_mask_randomize(self):
         mask = generate_mask(self.x, [1.])
-        self.assertFalse(torch.all(mask_randomize(self.x, mask == 1, 4) == self.x))
+        self.assertFalse(torch.any(mask_randomize(self.x, mask == 1, 4) == self.x))
         npt.assert_array_equal(mask_randomize(self.x, mask != 1, 4), self.x)
+
 
     def test_mask_fill(self):
         mask = generate_mask(self.x, [1.])

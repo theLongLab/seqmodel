@@ -95,9 +95,9 @@ class FineTuneBiRen(LightningModule):
         predicted, latent, embedded = self.model.forward(x)
         # remove dim 2 (seq) from predicted
         loss = self.loss_fn(predicted.squeeze(), target)
-        if batch_idx % self.hparams.print_progress_freq == 0:
-            print('Validation')
-            self.print_progress(predicted, target, x)
+        # if batch_idx % self.hparams.print_progress_freq == 0:
+        print('Validation')
+        self.print_progress(predicted, target, x)
         return {'loss': loss,
                 'log': {
                     'val_loss': loss,
@@ -161,7 +161,7 @@ def main():
         model.load_pretrained_model(pretrained.model)
     else:
         model = FineTuneBiRen(**vars(args))
-    args.callbacks = [CheckpointEveryNSteps(args.save_checkpoint_freq), PrintGradients()]
+    # args.callbacks = [CheckpointEveryNSteps(args.save_checkpoint_freq), PrintGradients()]
     trainer = Trainer.from_argparse_args(args)
     trainer.fit(model)
 

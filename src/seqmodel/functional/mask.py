@@ -49,8 +49,10 @@ def generate_mask(x, mask_props, require_loss_pos=False):
 
 # apply to index vector
 # random classes must be in {0, 1, ... n_classes - 1}
+# randomized class is guaranteed different from original by applying nonzero sum and modulo
 def mask_randomize(x, bool_mask, n_classes):
-    return x.masked_scatter(bool_mask, torch.randint_like(x, n_classes))
+    randomized = torch.remainder(x + torch.randint_like(x, 1, n_classes), n_classes)
+    return x.masked_scatter(bool_mask, randomized)
 
 # apply to either one-hot with (batch, channels, length) dims
 # or index vector (batch, length)
