@@ -60,6 +60,7 @@ python ./src/exp/seqbert/finetune-biren.py \
     --seq_len_source_multiplier=2. \
     --crop_factor=0.3 \
     --seq_len_sample_freq=0.25 \
+    --train_randomize_prop=1. \
     --load_pretrained_model=./lightning_logs/version_55349874/checkpoints/fixed-N-Step-Checkpoint_0_260000.ckpt \
 
     # --load_checkpoint_path='' \

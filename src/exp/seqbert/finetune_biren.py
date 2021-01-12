@@ -15,17 +15,27 @@ from exp.seqbert.model import SeqBERT, CheckpointEveryNSteps, PrintGradients
 from exp.seqbert.pretrain import Pretrain
 
 
-def parse_vista_label(str_label):
-    is_positive = ('positive' in str_label)  # positive or negative
-    is_human = ('Human' in str_label)  # human or mouse
-    matches = re.search('(chr[^:]+):(\d+)-', str_label)  # e.g. chr17:35447270-35448478
-    seqname = matches.group(1)
-    chr_coord_start = int(matches.group(2))  # add true coordinate from label into coord
-    return is_positive, is_human, seqname, chr_coord_start
+class LabelRadomizer():
 
-def transform_vista_label(key, coord):
-    is_positive, is_human, seqname, coord_start = parse_vista_label(key)
-    return (is_positive, is_human, seqname, coord + coord_start)
+    def __init__(self, randomize_prop):
+        self.randomize_prop = randomize_prop
+
+    @staticmethod
+    def parse_vista_label(str_label):
+        is_positive = ('positive' in str_label)  # positive or negative
+        is_human = ('Human' in str_label)  # human or mouse
+        matches = re.search('(chr[^:]+):(\d+)-', str_label)  # e.g. chr17:35447270-35448478
+        seqname = matches.group(1)
+        chr_coord_start = int(matches.group(2))  # add true coordinate from label into coord
+        return is_positive, is_human, seqname, chr_coord_start
+
+    def transform(self, key, coord):
+        is_positive, is_human, seqname, coord_start = self.parse_vista_label(key)
+        random_int = hash(seqname + str(coord_start))
+        PRECISION = 100
+        if (random_int % PRECISION) < (self.randomize_prop * PRECISION):
+            is_positive = (0 == ((random_int // PRECISION) % 2))
+        return (is_positive, is_human, seqname, coord + coord_start)
 
 
 class FineTuneBiRen(LightningModule):
@@ -52,30 +62,37 @@ class FineTuneBiRen(LightningModule):
         cropped = random_crop(source, self.hparams.min_len, self.hparams.seq_len)
         return random_seq_fill(cropped, target)
 
-    def get_dataloader(self, is_sequential, include_intervals=None):
+    def get_dataloader(self, is_sequential=False, include_intervals=None, randomize_freq=0.):
+        label_randomizer = LabelRadomizer(randomize_freq)
         if include_intervals is not None:
             include_intervals = bed_from_file(include_intervals)
         train_data = StridedSequence(FastaFile(self.hparams.seq_file),
                     self.hparams.seq_len,
                     include_intervals=include_intervals,
                     transform=self.data_transform,
-                    label_transform=transform_vista_label,
+                    label_transform=label_randomizer.transform,
                     sequential=is_sequential,
                     sample_freq=self.hparams.sample_freq,
                     min_len=self.hparams.min_len)
         return train_data.get_data_loader(self.hparams.batch_size, self.hparams.num_workers)
 
     def train_dataloader(self):
-        return self.get_dataloader(False, self.hparams.train_intervals)
+        return self.get_dataloader(
+                is_sequential=False,
+                include_intervals=self.hparams.train_intervals,
+                randomize_freq=self.hparams.train_randomize_prop)
 
     def val_dataloader(self):
-        return self.get_dataloader(True, self.hparams.valid_intervals)
+        return self.get_dataloader(
+                is_sequential=True,
+                include_intervals=self.hparams.valid_intervals,
+                randomize_freq=self.hparams.valid_randomize_prop)
 
     def test_dataloader(self):
         return self.get_dataloader(True, self.hparams.test_intervals)
 
-    def print_progress(self, predicted, target, x):
-        print('roc', roc_auc(torch.sigmoid(predicted.squeeze()), target))
+    def print_progress(self, predicted, target, x, is_human, seqname, coord):
+        print(seqname, coord, is_human, 'roc', roc_auc(torch.sigmoid(predicted.squeeze()), target))
 
     def training_step(self, batch, batch_idx):
         x, (is_positive, is_human, seqname, coord) = batch
@@ -84,7 +101,7 @@ class FineTuneBiRen(LightningModule):
         # remove dim 2 (seq) from predicted
         loss = self.loss_fn(predicted.squeeze(), target)
         if batch_idx % self.hparams.print_progress_freq == 0:
-            self.print_progress(predicted, target, x)
+            self.print_progress(predicted, target, x, is_human, seqname, coord)
         return {'loss': loss, #'seqname': seqname[-1], 'coord': coord[-1],
                 'log': {'train_loss': loss,} #'seqname': seqname[-1], 'coord': coord[-1],},
                 }
@@ -97,7 +114,7 @@ class FineTuneBiRen(LightningModule):
         loss = self.loss_fn(predicted.squeeze(), target)
         # if batch_idx % self.hparams.print_progress_freq == 0:
         print('Validation')
-        self.print_progress(predicted, target, x)
+        self.print_progress(predicted, target, x, is_human, seqname, coord)
         return {'loss': loss,
                 'log': {
                     'val_loss': loss,
@@ -139,6 +156,8 @@ class FineTuneBiRen(LightningModule):
         parser.add_argument('--save_checkpoint_freq', default=1000, type=int)
         parser.add_argument('--load_checkpoint_path', default=None, type=str)
         parser.add_argument('--load_pretrained_model', default=None, type=str)
+        parser.add_argument('--train_randomize_prop', default=0., type=str)
+        parser.add_argument('--valid_randomize_prop', default=0., type=str)
         return parser
 
 
