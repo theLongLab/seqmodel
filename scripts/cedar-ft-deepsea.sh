@@ -38,7 +38,7 @@ pip install pyfaidx pytorch-lightning
 tar xzf $DATA_DIR/*.tar.gz -C $RUN_DIR
 
 # hparams
-python ./src/exp/seqbert/finetune-deepsea.py \
+python ./src/exp/seqbert/finetune_deepsea.py \
     --n_dims=512 \
     --n_heads=4 \
     --n_layers=4 \

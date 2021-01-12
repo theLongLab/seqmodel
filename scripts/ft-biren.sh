@@ -1,6 +1,6 @@
 #!/bin/bash
 
-python src/exp/seqbert/finetune-biren.py \
+python src/exp/seqbert/finetune_biren.py \
     --n_dims=128 \
     --n_heads=2 \
     --n_layers=2 \
