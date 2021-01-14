@@ -5,9 +5,10 @@ import torch
 import torch.nn as nn
 import numpy.testing as npt
 
+from seqmodel import INDEX_TO_BASE
 from seqmodel.functional.log import *
 from seqmodel.seqdata.mapseq import create_test_batch
-from seqmodel.functional.transform import one_hot, index_to_bioseq, INDEX_TO_BASE
+from seqmodel.functional import one_hot, index_to_bioseq
 
 
 class Test_Conv(unittest.TestCase):

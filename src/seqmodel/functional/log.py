@@ -1,7 +1,8 @@
 from math import ceil
 import torch
 import torch.nn.functional as F
-from seqmodel.functional.transform import one_hot_to_index, softmax_to_index, N_BASE, INDEX_TO_BASE
+from seqmodel import N_BASE, INDEX_TO_BASE
+from seqmodel.functional import one_hot_to_index, softmax_to_index
 
 
 SYMBOL_INT = [' '] + [str(x) for x in range(1, 10)] + ['0']

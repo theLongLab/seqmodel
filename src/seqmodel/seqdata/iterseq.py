@@ -6,7 +6,7 @@ import pandas as pd
 import torch
 from pyfaidx import Fasta
 from torch.utils.data import IterableDataset
-from seqmodel.functional.transform import do_nothing
+from seqmodel.functional import do_nothing
 
 
 def bed_from_file(bed_filename):

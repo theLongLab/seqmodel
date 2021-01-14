@@ -5,7 +5,7 @@ import torch
 import numpy.testing as npt
 
 from seqmodel.functional.mask import *
-from seqmodel.functional.transform import one_hot, one_hot_to_index
+from seqmodel.functional import one_hot, one_hot_to_index
 from seqmodel.seqdata.mapseq import RandomRepeatSequence, create_test_batch
 
 

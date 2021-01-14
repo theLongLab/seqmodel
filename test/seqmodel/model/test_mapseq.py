@@ -8,7 +8,7 @@ import torch.nn as nn
 import numpy.testing as npt
 
 from seqmodel.seqdata.mapseq import *
-from seqmodel.functional.transform import index_to_bioseq
+from seqmodel.functional import index_to_bioseq
 
 
 class Test_Mapseq(unittest.TestCase):

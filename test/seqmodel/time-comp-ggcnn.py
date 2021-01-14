@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from itertools import product
 
-from seqmodel.functional.transform import one_hot
+from seqmodel.functional import one_hot
 from seqmodel.seqdata.mapseq import create_test_batch
 from seqmodel.model.invariant import *
 

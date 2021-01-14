@@ -7,7 +7,7 @@ import pytorch_lightning as pl
 
 from seqmodel.model.conv import SeqFeedForward
 from seqmodel.model.attention import SinusoidalPosition
-from seqmodel.functional.transform import INDEX_TO_BASE
+from exp.seqbert import TOKENS_BP
 
 
 def bool_to_tokens(bool_tensor, target_tensor_type=torch.long):
@@ -15,16 +15,6 @@ def bool_to_tokens(bool_tensor, target_tensor_type=torch.long):
 
 
 class SeqBERT(nn.Module):
-
-    TOKENS_BP = INDEX_TO_BASE + [  # AGCT 0 1 2 3
-        'n',  # 4 unknown base
-        'm',  # 5 masked base
-        '~',  # 6 classification token (always at start)
-        'f',  # 7 output token at classification token position, indicates pretext task false
-        't',  # 8 output token indicating pretext task is true
-        '/',  # 9 separator token (between two input sequences)
-        ]
-    TOKENS_BP_IDX = {k: v for v, k in enumerate(TOKENS_BP)}  # dict to look up above
 
     def __init__(self, **hparams):
         super().__init__()

@@ -1,20 +1,12 @@
+import sys
+sys.path.append('./src')
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from Bio.Seq import Seq
 
-
-BASE_TO_INDEX = {
-    'A': 0, 'a': 0,
-    'G': 1, 'g': 1,
-    'C': 2, 'c': 2,
-    'T': 3, 't': 3,
-    'N': 4, 'n': 4,
-    }
-EMPTY_INDEX = 4
-INDEX_TO_BASE = ['A', 'G', 'C', 'T']
-N_BASE = 4
+from seqmodel import BASE_TO_INDEX, EMPTY_INDEX, INDEX_TO_BASE, N_BASE
 
 
 # only works on one sequence at a time (1 dimension)

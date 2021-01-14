@@ -7,7 +7,9 @@ import numpy as np
 from Bio import SeqIO
 from Bio.Seq import Seq, MutableSeq
 from Bio.Alphabet import generic_dna
-from seqmodel.functional.transform import bioseq_to_index, INDEX_TO_BASE
+
+from seqmodel import INDEX_TO_BASE
+from seqmodel.functional import bioseq_to_index
 
 
 def random_bioseq(length, alphabet=INDEX_TO_BASE):

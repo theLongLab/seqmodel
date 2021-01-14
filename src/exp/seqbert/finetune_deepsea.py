@@ -7,7 +7,7 @@ from torch.utils.data import IterableDataset
 from pytorch_lightning.core.lightning import LightningModule
 from pytorch_lightning import Trainer, seed_everything
 
-from seqmodel.functional.transform import one_hot_to_index
+from seqmodel.functional import one_hot_to_index
 from seqmodel.functional.log import roc_auc
 from selene.mat_file_sampler import MatFileSampler
 from exp.seqbert.model import SeqBERT, CheckpointEveryNSteps, PrintGradients

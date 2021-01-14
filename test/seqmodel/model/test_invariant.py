@@ -5,7 +5,7 @@ import torch.nn as nn
 import numpy.testing as npt
 
 from seqmodel.model.invariant import *
-from seqmodel.functional.transform import complement, reverse, reverse_complement, one_hot, swap
+from seqmodel.functional import complement, reverse, reverse_complement, one_hot, swap
 from seqmodel.seqdata.mapseq import create_test_batch
 
 

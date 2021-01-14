@@ -3,7 +3,7 @@ sys.path.append('./src')
 import torch
 import torch.nn as nn
 
-from seqmodel.functional.transform import N_BASE, Compose, one_hot
+from seqmodel.functional import N_BASE, Compose, one_hot
 
 
 """

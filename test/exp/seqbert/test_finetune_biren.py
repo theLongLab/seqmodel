@@ -8,7 +8,7 @@ import numpy.testing as npt
 
 from exp.seqbert.finetune_biren import *
 from seqmodel.seqdata.iterseq import StridedSequence
-from seqmodel.functional.transform import bioseq_to_index
+from seqmodel.functional import bioseq_to_index
 
 
 class Test_LabelRandomizer(unittest.TestCase):

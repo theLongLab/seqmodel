@@ -9,15 +9,16 @@ import pytorch_lightning as pl
 from pytorch_lightning.core.lightning import LightningModule
 from pytorch_lightning import Trainer, seed_everything
 
-from exp.seqbert.model import SeqBERT, CheckpointEveryNSteps, PrintGradients, bool_to_tokens
+from seqmodel import INDEX_TO_BASE
 from seqmodel.functional.mask import generate_mask, mask_randomize, mask_fill, mask_select
 from seqmodel.seqdata.mapseq import RandomRepeatSequence
 from seqmodel.seqdata.iterseq import StridedSequence, bed_from_file, FastaFile
-from seqmodel.functional.transform import INDEX_TO_BASE, Compose, bioseq_to_index, \
-                            permute
+from seqmodel.functional import Compose, bioseq_to_index, permute
 from seqmodel.functional.log import prediction_histograms, normalize_histogram, \
                             summarize, correct, accuracy_per_class, accuracy, \
                             summarize_weights_and_grads, tensor_stats_str
+from exp.seqbert import TOKENS_BP_IDX
+from exp.seqbert.model import SeqBERT, CheckpointEveryNSteps, PrintGradients, bool_to_tokens
 
 
 class PretrainBatchProcessor():
@@ -42,7 +43,7 @@ class PretrainBatchProcessor():
             # labels: True (not permuted) or False (permuted) token
             cls_target = bool_to_tokens(torch.logical_not(is_permuted))
             # insert sep token between 'first' and 'last'
-            sep = torch.ones([batch.size(0), 1], dtype=batch.dtype) * SeqBERT.TOKENS_BP_IDX['/']
+            sep = torch.ones([batch.size(0), 1], dtype=batch.dtype) * TOKENS_BP_IDX['/']
             return cls_target, torch.cat([first, sep, last], dim=1)
 
     def rand_subseq(self, split_seqs):  # index relative to source midpoint
@@ -55,7 +56,7 @@ class PretrainBatchProcessor():
         sep_offsets = torch.randint(self.offset_min, self.offset_max, [batch_size])
 
         # fill target with empty/undefined base 'N'
-        target = SeqBERT.TOKENS_BP_IDX['n'] * torch.ones([batch_size, self.seq_len],
+        target = TOKENS_BP_IDX['n'] * torch.ones([batch_size, self.seq_len],
                                                         dtype=split_seqs.dtype)
         for i, (seq, start, end, offset) in enumerate(zip(split_seqs, starts, ends, sep_offsets)):
             tgt_start = max(1, start + offset)  # position 0 reserved for CLS token
@@ -71,13 +72,13 @@ class PretrainBatchProcessor():
             mask = generate_mask(target, self.mask_props)
             # omit classification token, separator, and any empty 'N'
             mask[:, 0] = Pretrain.NO_LOSS_INDEX
-            omit = torch.logical_or(target == SeqBERT.TOKENS_BP_IDX['/'],
-                                    target == SeqBERT.TOKENS_BP_IDX['n'])
+            omit = torch.logical_or(target == TOKENS_BP_IDX['/'],
+                                    target == TOKENS_BP_IDX['n'])
             mask = mask.masked_fill(omit, Pretrain.NO_LOSS_INDEX)
             source = mask_randomize(target, mask == Pretrain.RANDOM_INDEX, 4)  # 4 base pairs
-            source = mask_fill(source, mask == Pretrain.MASK_INDEX, SeqBERT.TOKENS_BP_IDX['m'])
+            source = mask_fill(source, mask == Pretrain.MASK_INDEX, TOKENS_BP_IDX['m'])
             # replace the classification target with CLS token '~'
-            source[:, 0] = SeqBERT.TOKENS_BP_IDX['~']
+            source[:, 0] = TOKENS_BP_IDX['~']
             # return mask of all positions that will contribute to loss
             return source, mask
 

@@ -8,7 +8,8 @@ import torch
 import torch.nn as nn
 import numpy.testing as npt
 
-from seqmodel.functional.transform import *
+from seqmodel import EMPTY_INDEX, INDEX_TO_BASE
+from seqmodel.functional import *
 from seqmodel.seqdata.mapseq import random_bioseq
 
 

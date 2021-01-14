@@ -8,17 +8,19 @@ from torch.utils.data import IterableDataset
 from pytorch_lightning.core.lightning import LightningModule
 from pytorch_lightning import Trainer, seed_everything
 
-from seqmodel.functional.transform import bioseq_to_index, random_crop, random_seq_fill
+from seqmodel.functional import bioseq_to_index, random_crop, random_seq_fill
 from seqmodel.functional.log import roc_auc
 from seqmodel.seqdata.iterseq import StridedSequence, FastaFile, bed_from_file
+from exp.seqbert import TOKENS_BP_IDX
 from exp.seqbert.model import SeqBERT, CheckpointEveryNSteps, PrintGradients
 from exp.seqbert.pretrain import Pretrain
 
 
 class LabelRadomizer():
 
-    def __init__(self, randomize_prop):
+    def __init__(self, randomize_prop, precision=2):
         self.randomize_prop = randomize_prop
+        self.precision = 10**precision
 
     @staticmethod
     def parse_vista_label(str_label):
@@ -32,9 +34,8 @@ class LabelRadomizer():
     def transform(self, key, coord):
         is_positive, is_human, seqname, coord_start = self.parse_vista_label(key)
         random_int = hash(seqname + str(coord_start))
-        PRECISION = 100
-        if (random_int % PRECISION) < (self.randomize_prop * PRECISION):
-            is_positive = (0 == ((random_int // PRECISION) % 2))
+        if (random_int % self.precision) < (self.randomize_prop * self.precision):
+            is_positive = (0 == ((random_int // self.precision) % 2))
         return (is_positive, is_human, seqname, coord + coord_start)
 
 
@@ -58,7 +59,7 @@ class FineTuneBiRen(LightningModule):
 
     def data_transform(self, seq):
         source = bioseq_to_index(seq)
-        target = SeqBERT.TOKENS_BP_IDX['n'] * torch.ones(self.hparams.seq_len, dtype=source.dtype)
+        target = TOKENS_BP_IDX['n'] * torch.ones(self.hparams.seq_len, dtype=source.dtype)
         cropped = random_crop(source, self.hparams.min_len, self.hparams.seq_len)
         return random_seq_fill(cropped, target)
 
@@ -156,8 +157,8 @@ class FineTuneBiRen(LightningModule):
         parser.add_argument('--save_checkpoint_freq', default=1000, type=int)
         parser.add_argument('--load_checkpoint_path', default=None, type=str)
         parser.add_argument('--load_pretrained_model', default=None, type=str)
-        parser.add_argument('--train_randomize_prop', default=0., type=str)
-        parser.add_argument('--valid_randomize_prop', default=0., type=str)
+        parser.add_argument('--train_randomize_prop', default=0., type=float)
+        parser.add_argument('--valid_randomize_prop', default=0., type=float)
         return parser
 
 
