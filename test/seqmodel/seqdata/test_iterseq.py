@@ -1,7 +1,6 @@
 import sys
 sys.path.append('./src')
 import unittest
-import pandas as pd
 import numpy as np
 from pyfaidx import Fasta
 import numpy.testing as npt
@@ -60,8 +59,7 @@ class Test_StridedSeq(unittest.TestCase):
         npt.assert_array_equal(data[3], self.seqs[0][20:23])
         npt.assert_array_equal(data[-1], self.seqs[0][-3:])
 
-        intervals = pd.read_csv('data/ref_genome/grch38_contig_intervals.bed',
-                                names=['seqname', 'start', 'end'], sep='\t')
+        intervals = bed_from_file('data/ref_genome/grch38_contig_intervals.bed')
         dataset = StridedSequence(FastaFile('data/ref_genome/p12/assembled_chr/GRCh38_p12_assembled_chr.fa'),
                                 100, sequential=True, include_intervals=intervals)
         for i, (_, _) in dataset:

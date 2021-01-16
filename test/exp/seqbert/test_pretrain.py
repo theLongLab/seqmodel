@@ -3,7 +3,6 @@ sys.path.append('./src')
 import unittest
 import torch
 import torch.nn as nn
-import pandas as pd
 import numpy.testing as npt
 
 from seqmodel.seqdata.iterseq import StridedSequence
