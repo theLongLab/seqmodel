@@ -18,7 +18,7 @@ class SeqBERT(nn.Module):
 
     def __init__(self, **hparams):
         super().__init__()
-        self.tokens = self.TOKENS_BP  # may have different tokenizations in the future
+        self.tokens = TOKENS_BP  # may have different tokenizations in the future
         embedding = nn.Embedding(len(self.tokens), hparams['n_dims'])
         if hparams['position_embedding'] == 'Sinusoidal':
             self.embedding = nn.Sequential(

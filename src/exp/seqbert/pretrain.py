@@ -111,7 +111,7 @@ class Pretrain(LightningModule):
         self.prev_loss = 10000.
 
         # get sequence of length 2*seq_len from dataloader
-        self.load_seq_len = self.hparams.seq_len_source_multiplier * self.hparams.seq_len
+        self.load_seq_len = int(self.hparams.seq_len_source_multiplier * self.hparams.seq_len)
         min_crop = int(self.hparams.seq_len * self.hparams.crop_factor)
         max_crop = self.hparams.seq_len - min_crop
         offset_min = 1 + min_crop
