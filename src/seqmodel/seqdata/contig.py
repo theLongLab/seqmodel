@@ -1,6 +1,11 @@
+from collections import deque
+import vcf
 import pandas as pd
 from Bio import SeqIO
 
+"""
+Standalone tools for extracting interval information from genome files.
+"""
 
 def map_contigs(fasta_filename, buffer=65536):
     contigs = ByteStreamContigs()
@@ -12,12 +17,20 @@ def map_contigs(fasta_filename, buffer=65536):
                 break
             for byte in data:
                 contigs.read(byte)
-    return pd.DataFrame(contigs.contigs, columns=['header', 'coord_length', 'byte_offset', 'start_coord'])
+    return pd.DataFrame(contigs.contigs,
+            columns=['header', 'coord_length', 'byte_offset', 'start_coord'])
 
 
 class ByteStreamContigs():
 
-    def __init__(self, is_header=False, is_empty=True, offset=0, coord=0, header=b'', start_offset=0, start_coord=0, contigs=[]):
+    # byte values
+    _NEWLINE = 10
+    _N_LOWER = 110
+    _N_UPPER = 78
+    _GREATER_THAN = 62
+
+    def __init__(self, is_header=False, is_empty=True, offset=0, coord=0,
+                header=b'', start_offset=0, start_coord=0, contigs=[]):
         self.is_header = is_header
         self.is_empty = is_empty
         self.offset = offset  # distance in file
@@ -26,11 +39,6 @@ class ByteStreamContigs():
         self.start_offset = start_offset
         self.start_coord = start_coord
         self.contigs = contigs
-        # byte values
-        self._NEWLINE = 10
-        self._N_LOWER = 110
-        self._N_UPPER = 78
-        self._GREATER_THAN = 62
 
     def _reset_coord(self):
         self.is_header = False
@@ -80,9 +88,49 @@ class ByteStreamContigs():
             self._add_contig()
 
 
+def map_variant_density(vcf_file, window_len, density_threshold, min_gap_between_intervals=1):
+    reader = vcf.Reader(filename=vcf_file)
+    window = window_len + min_gap_between_intervals
+    var_queue = deque()
+    intervals = []
+    interval_start = -1  # negative if not in interval
+    # assume records are sorted (by chrom, pos)
+    for record in reader:
+        print(record.CHROM, record.POS, end='\r')
+        # if moving to different region, close previous interval and reset
+        if interval_start > 0 and record.CHROM != var_queue[-1].CHROM:
+            intervals.append([var_queue[-1].CHROM, interval_start, var_queue[-1].POS + window_len])
+            var_queue = deque()  # empty queue
+            interval_start = -1
+
+        cur_pos = record.POS  # move window to next variant position
+        # remove variants that are no longer in window, keep closest one to cur_pos
+        while len(var_queue) > 0 and var_queue[0].POS <= cur_pos - window:
+            last_variant = var_queue.popleft()
+            # test for end of interval
+            if interval_start > 0 and len(var_queue) < density_threshold:
+                intervals.append([record.CHROM, interval_start, last_variant.POS + window_len])
+                interval_start = -1
+        
+        # test for start of interval
+        var_queue.append(record)
+        if interval_start < 0 and len(var_queue) >= density_threshold:
+            # bed intervals indexed from 0
+            # add 1 for interval to cover cur_pos
+            interval_start = max(0, cur_pos - window_len + 1)
+
+    if interval_start > 0:  # add last interval
+        intervals.append([var_queue[-1].CHROM, interval_start, var_queue[-1].POS + window_len])
+    return pd.DataFrame(intervals, columns=['seqname', 'start', 'end'])
+
+
 if __name__ == '__main__':
-    test_filename = 'test/data/grch38_excerpt.fa'
+    # test_filename = 'test/data/grch38_excerpt.fa'
     # self.test_filename = 'data/ref_genome/chr22.fa'
     # self.test_filename = 'data/ref_genome/p12/assembled_chr/GRCh38_p12_assembled_chr.fa'
-    df = map_contigs(test_filename, buffer=65536)
-    df.to_csv('contig-coords-fai.csv')
+    # df = map_contigs(test_filename, buffer=65536)
+    # df.to_csv('contig-coords-fai.csv')
+    df = map_variant_density('./data/vcf/ALL.chr22.shapeit2_integrated_v1a.GRCh38.20181129.phased.vcf.gz',
+                    1000, 10)
+    df.to_csv('chr22-1000-seq-10-variants.bed')
+

@@ -89,6 +89,20 @@ Running on HPC
     git push {remote_name} {branch_name}
     ```
 
+Genomic files
+=============
+BED files: used to annotate regions of genome.
+- coordinates are zero indexed, unlike VCF
+- end coordinate is non-inclusive
+
+VCF files: table of variants.
+- coordinates are 1-indexed
+- usually bgzip compressed, with tabix file for random access
+
+FASTA files: genetic sequence in ASCII text format.
+- .fai file for random access (this is a simple byte indexing of intervals and line lengths)
+
+
 Pytorch-Lightning
 =================
 
