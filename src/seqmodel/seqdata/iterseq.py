@@ -4,9 +4,12 @@ from math import log, sqrt, ceil
 import numpy as np
 import pandas as pd
 import torch
-from pyfaidx import Fasta
+import torch.nn as nn
+from pyfaidx import Fasta, FastaVariant
 from torch.utils.data import IterableDataset
+
 from seqmodel.functional import do_nothing
+from seqmodel.functional.mask import generate_mask, mask_randomize
 
 
 def bed_from_file(bed_filename):
@@ -71,6 +74,30 @@ class FastaFile(SequentialData):
         return [len(seq) for seq in self.fasta.values()]
 
 
+class FastaVariantFile(FastaFile):
+
+    def __init__(self, fasta_file, vcf_file, randomize_sample=True):
+        self.fasta_file = fasta_file
+        self.vcf_file = vcf_file
+        super().__init__(fasta_file)
+        self.randomize_sample = randomize_sample
+    
+    def instance(self):
+        super().instance()
+        self.fasta_variant = FastaVariant(self.fasta_file, self.vcf_file, as_raw=True)
+    
+    def get(self, seqname, coord_start, coord_end):
+        if self.randomize_sample:
+            vcf = self.fasta_variant.vcf
+            sample_idx = torch.randint(len(vcf.samples), [1]).item()
+            self.fasta_variant.sample = vcf.samples[sample_idx]
+        # return ref_seq, var_seq, all potential variants
+        return (self.fasta[seqname][coord_start:coord_end],
+            self.fasta_variant[seqname][coord_start:coord_end],
+            vcf.fetch(seqname, coord_start - 1, coord_end),  # VCF indexed from 1
+            self.fasta_variant.sample)
+
+
 class StridedSequence(IterableDataset):
 
     """
@@ -79,8 +106,9 @@ class StridedSequence(IterableDataset):
         include_intervals: sequence intervals to sample from, in the form
             `{'seqname': [list<str>], 'start': [list<int>], 'end': [list<int>]}`.
             If `include_intervals=None`, sample from all sequence data.
-        transform: function applied to sequence output (type depends on SequentialData object)
-        label_transform: function applied to tuple of (key, coord) for sequence
+        transform: function applied to output (type depends on SequentialData object)
+        seq_transform: function applied to sequence only, overriden by `transform`
+        label_transform: function applied to metadata (key, coord) only, overriden by `transform`
         sequential: if `True`, this is equivalent to setting `stride=1` and `start_offset=0`
         stride: how many indices to move between samples. Defaults to nearest power of 2
             to square root of total sequence positions
@@ -95,8 +123,9 @@ class StridedSequence(IterableDataset):
                 sequence_data,
                 seq_len,
                 include_intervals=None,
-                transform=torch.nn.Identity(),
-                label_transform=do_nothing,
+                transform=None,
+                seq_transform=None,
+                label_transform=None,
                 sequential=False,
                 stride=None,
                 start_offset=None,
@@ -105,8 +134,10 @@ class StridedSequence(IterableDataset):
 
         self.sequence_data = sequence_data
         self.seq_len = seq_len
-        self.transform = transform
-        self.label_transform = label_transform
+        if transform is not None:
+            self.transform = transform
+        else:
+            self.transform = CombineTransforms(seq_transform, label_transform)
         self.include_intervals = include_intervals
         self.sample_freq = sample_freq
         if self.include_intervals is None:  # use entire sequence
@@ -180,4 +211,19 @@ class StridedSequence(IterableDataset):
         for i in range(self._iter_start, self._iter_end):
             key, coord = self.index_to_coord(i)
             seq = self.sequence_data.get(key, coord, coord + self.seq_len)
-            yield self.transform(seq), self.label_transform(key, coord)
+            yield self.transform(seq, (key, coord))
+
+
+class CombineTransforms(nn.Module):
+
+    def __init__(self, seq_transform=None, label_transform=None):
+        super().__init__()
+        self.seq_transform = do_nothing
+        if seq_transform is not None:
+            self.seq_transform = seq_transform
+        self.label_transform = do_nothing
+        if label_transform is not None:
+            self.label_transform = label_transform
+
+    def forward(self, seqs, labels):
+        return self.seq_transform(seqs), self.label_transform(*labels)

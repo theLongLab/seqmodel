@@ -6,6 +6,7 @@ from pyfaidx import Fasta
 import numpy.testing as npt
 
 from seqmodel.seqdata.iterseq import *
+from seqmodel.functional import bioseq_to_index
 
 
 class Test_StridedSeq(unittest.TestCase):

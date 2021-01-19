@@ -15,7 +15,7 @@ class Test_LabelRandomizer(unittest.TestCase):
     def setUp(self):
         self.seqfile = FastaFile('test/data/enhancers.fa')
         self.dataset = StridedSequence(self.seqfile, 60,
-                        sequential=True, transform=bioseq_to_index)
+                        sequential=True, seq_transform=bioseq_to_index)
         self.labels = [x[1] for x in self.dataset]
 
     def tearDown(self):

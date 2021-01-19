@@ -12,7 +12,7 @@ from seqmodel.functional import bioseq_to_index, random_crop, random_seq_fill
 from seqmodel.functional.log import roc_auc
 from seqmodel.seqdata.iterseq import StridedSequence, FastaFile, bed_from_file
 from exp.seqbert import TOKENS_BP_IDX
-from exp.seqbert.model import SeqBERT, CheckpointEveryNSteps, PrintGradients
+from exp.seqbert.model import SeqBERT, CheckpointEveryNSteps, PrintGradients, main
 from exp.seqbert.pretrain import Pretrain
 
 
@@ -52,12 +52,12 @@ class FineTuneBiRen(LightningModule):
 
     def load_pretrained_model(self, seqbert_obj):
         self.model.embedding = seqbert_obj.embedding
-        self.model.transformer = seqbert_obj.transformer
+        self.model.transformer_encoder = seqbert_obj.transformer_encoder
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.model.parameters(), lr=self.hparams.learning_rate)
 
-    def data_transform(self, seq):
+    def seq_transform(self, seq):
         source = bioseq_to_index(seq)
         target = TOKENS_BP_IDX['n'] * torch.ones(self.hparams.seq_len, dtype=source.dtype)
         cropped = random_crop(source, self.hparams.min_len, self.hparams.seq_len)
@@ -70,7 +70,7 @@ class FineTuneBiRen(LightningModule):
         train_data = StridedSequence(FastaFile(self.hparams.seq_file),
                     self.hparams.seq_len,
                     include_intervals=include_intervals,
-                    transform=self.data_transform,
+                    seq_transform=self.seq_transform,
                     label_transform=label_randomizer.transform,
                     sequential=is_sequential,
                     sample_freq=self.hparams.sample_freq,
@@ -97,7 +97,7 @@ class FineTuneBiRen(LightningModule):
 
     def training_step(self, batch, batch_idx):
         x, (is_positive, is_human, seqname, coord) = batch
-        target = is_positive.to(torch.float)
+        target = is_positive.float()
         predicted, latent, embedded = self.model.forward(x)
         # remove dim 2 (seq) from predicted
         loss = self.loss_fn(predicted.squeeze(), target)
@@ -162,29 +162,5 @@ class FineTuneBiRen(LightningModule):
         return parser
 
 
-def main():
-    parent_parser = ArgumentParser(add_help=False)
-    parser = FineTuneBiRen.add_model_specific_args(parent_parser)
-    parser = Trainer.add_argparse_args(parser)
-    parser.set_defaults(gpus=1)
-    args = parser.parse_args()
-
-    seed_everything(0)
-    # defaults
-    args.mode = 'classify'
-    print(vars(args))
-    if args.load_checkpoint_path is not None:
-        model = FineTuneBiRen.load_from_checkpoint(args.load_checkpoint_path, **vars(args))
-    elif args.load_pretrained_model is not None:
-        model = FineTuneBiRen(**vars(args))
-        pretrained = Pretrain.load_from_checkpoint(args.load_pretrained_model)
-        model.load_pretrained_model(pretrained.model)
-    else:
-        model = FineTuneBiRen(**vars(args))
-    # args.callbacks = [CheckpointEveryNSteps(args.save_checkpoint_freq), PrintGradients()]
-    trainer = Trainer.from_argparse_args(args)
-    trainer.fit(model)
-
-
 if __name__ == '__main__':
-    main()
+    main(FineTuneBiRen, is_classifier=True)

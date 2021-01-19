@@ -54,11 +54,13 @@ class MapSequence(torch.utils.data.Dataset):
 
 class RandomRepeatSequence(torch.utils.data.Dataset):
 
-    def __init__(self, seq_len, n_batch, n_repeats, repeat_len=1):
+    def __init__(self, seq_len, n_batch, n_repeats, repeat_len=1,
+                transform=bioseq_to_index):
         self.seq_len = seq_len
         self.n_batch = n_batch
         self.n_repeats = n_repeats
         self.repeat_len = repeat_len
+        self.transform = transform
 
         empty_seq = Seq('')
         self.seq = MutableSeq('')
@@ -71,25 +73,11 @@ class RandomRepeatSequence(torch.utils.data.Dataset):
         return self.n_batch
 
     def __getitem__(self, index):
-        seq = bioseq_to_index(self.seq[index * self.seq_len: (index + 1) * self.seq_len])
-        return seq, ('Random', index)
+        seq = self.seq[index * self.seq_len: (index + 1) * self.seq_len]
+        return self.transform(seq), ('Random', index)
 
 
 # quickly create a batch for testing purposes
 def create_test_batch(batch_size, seq_len):
     dataset = RandomRepeatSequence(seq_len, batch_size, 2, repeat_len=2)
     return torch.stack([dataset[i][0] for i in range(batch_size)], dim=0)
-
-
-# class LabelledSequence(torch.utils.data.Dataset):
-
-#     def __init__(self, filename, input_seq_len):
-#         data = torch.load(filename)
-#         self.labels = torch.tensor(data['labels'][:, (891, 914)])
-#         self.one_hot = torch.tensor(data['x'][:, :, 500-int(input_seq_len/2):500+int(input_seq_len/2)])
-
-#     def __len__(self):
-#         return len(self.labels)
-
-#     def __getitem__(self, index):
-#         return self.one_hot[index], self.labels[index]

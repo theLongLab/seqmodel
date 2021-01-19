@@ -10,7 +10,7 @@ from pytorch_lightning import Trainer, seed_everything
 from seqmodel.functional import one_hot_to_index
 from seqmodel.functional.log import roc_auc
 from selene.mat_file_sampler import MatFileSampler
-from exp.seqbert.model import SeqBERT, CheckpointEveryNSteps, PrintGradients
+from exp.seqbert.model import SeqBERT, CheckpointEveryNSteps, PrintGradients, main
 from exp.seqbert.pretrain import Pretrain
 
 
@@ -34,7 +34,7 @@ class MatFileDataset(IterableDataset):
             yield seq, target  # (batch, seq, channel) and (batch, channel)
 
 
-class FineTuneDeepSEA(LightningModule):
+class FineTuneDeepSEA(LightningModule)
 
     def __init__(self, **hparams):
         super().__init__()
@@ -44,7 +44,7 @@ class FineTuneDeepSEA(LightningModule):
 
     def load_pretrained_model(self, seqbert_obj):
         self.model.embedding = seqbert_obj.embedding
-        self.model.transformer = seqbert_obj.transformer
+        self.model.transformer_encoder = seqbert_obj.transformer_encoder
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.model.parameters(), lr=self.hparams.learning_rate)
@@ -128,29 +128,5 @@ class FineTuneDeepSEA(LightningModule):
         return parser
 
 
-def main():
-    parent_parser = ArgumentParser(add_help=False)
-    parser = FineTuneDeepSEA.add_model_specific_args(parent_parser)
-    parser = Trainer.add_argparse_args(parser)
-    parser.set_defaults(gpus=1)
-    args = parser.parse_args()
-
-    seed_everything(0)
-    # defaults
-    args.mode = 'classify'
-    print(vars(args))
-    if args.load_checkpoint_path is not None:
-        model = FineTuneDeepSEA.load_from_checkpoint(args.load_checkpoint_path, **vars(args))
-    elif args.load_pretrained_model is not None:
-        model = FineTuneDeepSEA(**vars(args))
-        pretrained = Pretrain.load_from_checkpoint(args.load_pretrained_model)
-        model.load_pretrained_model(pretrained.model)
-    else:
-        model = FineTuneDeepSEA(**vars(args))
-    args.callbacks = [CheckpointEveryNSteps(args.save_checkpoint_freq), PrintGradients()]
-    trainer = Trainer.from_argparse_args(args)
-    trainer.fit(model)
-
-
 if __name__ == '__main__':
-    main()
+    main(FineTuneDeepSEA, is_classifier=True)

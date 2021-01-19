@@ -18,7 +18,8 @@ from seqmodel.functional.log import prediction_histograms, normalize_histogram, 
                             summarize, correct, accuracy_per_class, accuracy, \
                             summarize_weights_and_grads, tensor_stats_str
 from exp.seqbert import TOKENS_BP_IDX
-from exp.seqbert.model import SeqBERT, CheckpointEveryNSteps, PrintGradients, bool_to_tokens
+from exp.seqbert.model import SeqBERT, CheckpointEveryNSteps, \
+                            PrintGradients, bool_to_tokens, main
 
 
 class PretrainBatchProcessor():
@@ -138,7 +139,7 @@ class Pretrain(LightningModule):
                 intervals = bed_from_file(self.hparams.train_intervals)
             train_data = StridedSequence(FastaFile(self.hparams.seq_file),
                         self.load_seq_len, include_intervals=intervals,
-                        transform=bioseq_to_index, sequential=False,
+                        seq_transform=bioseq_to_index, sequential=False,
                         sample_freq=self.sample_freq)
         return train_data.get_data_loader(self.hparams.batch_size, self.hparams.num_workers,
                         collate_fn=self.batch_processor.collate)
@@ -157,7 +158,7 @@ class Pretrain(LightningModule):
                 intervals = bed_from_file(self.hparams.valid_intervals)
             valid_data = StridedSequence(FastaFile(self.hparams.seq_file),
                         self.load_seq_len, include_intervals=intervals, 
-                        transform=bioseq_to_index, sequential=True,
+                        seq_transform=bioseq_to_index, sequential=True,
                         sample_freq=self.sample_freq)
         return valid_data.get_data_loader(self.hparams.batch_size, self.hparams.num_workers,
                         collate_fn=self.batch_processor.collate)
@@ -206,7 +207,7 @@ class Pretrain(LightningModule):
         # if include_grad:
         #     loss.backward(retain_graph=True)
         #     self.optimizers().step()
-        # print(summarize_weights_and_grads({'embedding': self.embedding, 'transformer': self.transformer,
+        # print(summarize_weights_and_grads({'embedding': self.embedding, 'transformer': self.transformer_encoder,
         #         'decoder': self.decoder}, include_grad=False, threshold_trigger=0.))
         hist = prediction_histograms(predicted.detach().cpu(), target.detach().cpu(), n_bins=5)
         acc = normalize_histogram(hist)
@@ -283,27 +284,5 @@ class Pretrain(LightningModule):
         return parser
 
 
-def main():
-    parent_parser = ArgumentParser(add_help=False)
-
-    parser = Pretrain.add_model_specific_args(parent_parser)
-    parser = Trainer.add_argparse_args(parser)
-    parser.set_defaults(gpus=1)
-    args = parser.parse_args()
-
-    seed_everything(0)
-    # defaults
-    args.mode = 'all'
-    args.n_class = -1
-    print(vars(args))
-    if args.load_checkpoint_path is not None:
-        model = Pretrain.load_from_checkpoint(args.load_checkpoint_path, **vars(args))
-    else:
-        model = Pretrain(**vars(args))
-    args.callbacks = [CheckpointEveryNSteps(args.save_checkpoint_freq), PrintGradients()]
-    trainer = Trainer.from_argparse_args(args)
-    trainer.fit(model)
-
-
 if __name__ == '__main__':
-    main()
+    main(Pretrain, is_classifier=False)

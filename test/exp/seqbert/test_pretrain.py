@@ -24,7 +24,7 @@ class Test_Pretrain(unittest.TestCase):
         }
         self.dataset = StridedSequence(self.seqfile, 2 * self.seq_len,
                         sequential=True, include_intervals=intervals,
-                        transform=bioseq_to_index)
+                        seq_transform=bioseq_to_index)
         self.data = [x[0] for x in self.dataset]
         self.batch = torch.stack(self.data, dim=0)
 

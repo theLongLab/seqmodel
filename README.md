@@ -1,3 +1,8 @@
+Notes and Conventions
+=================
+- single nucleotides are indexed A=0, G=1, C=2, T=3 (identical to original DeepSEA paper `.mat` files)
+
+
 Code Organization
 =================
 
@@ -96,7 +101,7 @@ BED files: used to annotate regions of genome.
 - end coordinate is non-inclusive
 
 VCF files: table of variants.
-- coordinates are 1-indexed
+- coordinates are 1-indexed (this convention is kept anywhere vcf coordinates are input)
 - usually bgzip compressed, with tabix file for random access
 
 FASTA files: genetic sequence in ASCII text format.
