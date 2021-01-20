@@ -1,6 +1,7 @@
 import sys
 sys.path.append('./src')
 import os.path
+import torch
 import torch.nn as nn
 import pytorch_lightning as pl
 
@@ -22,7 +23,7 @@ class SeqBERT(nn.Module):
     CLS_TOKEN = 6
     CLS_OFFSET = 7
 
-    def __init__(self, **hparams):
+    def __init__(self, classify_only=False, **hparams):
         super().__init__()
         self.tokens = self.TOKENS_BP  # may have different tokenizations in the future
         embedding = nn.Embedding(len(self.tokens), hparams['n_dims'])
@@ -45,10 +46,7 @@ class SeqBERT(nn.Module):
             n_class = hparams['n_class']
         self.decoder = SeqFeedForward(hparams['n_dims'], n_class,
                         hidden_layers=hparams['n_decode_layers'] - 1, activation_fn=nn.ReLU)
-
-        self.classify_only = False  # whether to decode all positions or only first one
-        if ('mode' in hparams) and hparams['mode'] == 'classify':
-            self.classify_only = True
+        self.classify_only = classify_only  # whether to decode all positions or only first one
 
     def forward(self, x):
         # input dims are (batch, seq), embedding adds channel dim to end
@@ -57,8 +55,8 @@ class SeqBERT(nn.Module):
         # swap dimensions from (seq, batch, channel) to (batch, channels, seq_len)
         latent = self.transformer(embedded).permute(1, 2, 0)
         if self.classify_only:
-            latent = latent[:, :, 0:1]
-        predicted = self.decoder(latent)
+            latent = latent[:, :, 0:1]  # take index 0 of seq as target
+        predicted = self.decoder(latent).squeeze() # remove seq dim (dim=2)
         return predicted, latent, embedded
 
 
@@ -100,11 +98,24 @@ class CheckpointEveryNSteps(pl.Callback):
             print("Saving to", ckpt_path)
             trainer.save_checkpoint(ckpt_path)
 
+"""
+Note: do not run on multi-GPU (no reduce function defined)
+"""
+class BinaryPredictTensorMetric(pl.metrics.Metric):
 
-class PrintGradients(pl.Callback):
-    def __init__(self):
-        print('zero grad callback loaded')
+    def __init__(self, dim=0):
+        super().__init__(dist_sync_on_step=False)
+        self.cat_along_dim = dim
+        self.add_state("score", default=[], dist_reduce_fx=None)
 
-    def on_before_zero_grad(self, *args, **kwargs):
-        print('zero grad callback')
-        print(args, kwargs)
+    def update(self, preds: torch.Tensor, target: torch.Tensor):
+        assert preds.shape == target.shape
+        score = target - torch.sigmoid(preds)
+        score = score.detach().cpu()
+        if self.score == []:
+            self.score = score
+        else:
+            self.score = torch.cat([self.score, score], dim=self.cat_along_dim)
+
+    def compute(self):
+        return self.score

@@ -1,16 +1,18 @@
 #!/bin/bash
-#SBATCH --job-name=seqbert-bp
+#SBATCH --job-name=seqbert-ft
 #SBATCH --account=def-quanlong            # needed for resource billing if using compute canada
 #SBATCH --time=12:00:00                           # max walltime in D-HH:MM or HH:MM:SS
 #SBATCH --cpus-per-task=4             # number of cores
 #SBATCH --gres=gpu:p100:1                 # type and number of GPU(s) per node
 #SBATCH --mem=16000                                       # max memory (default unit is MB) per node
-#SBATCH --output=seqbert-ft-%j.out                 # file name for the output
-#SBATCH --error=seqbert-ft-%j.err                  # file name for errors
+#SBATCH --output%j-deepseatest.out                 # file name for the output
+#SBATCH --error=%j-deepseatest.err                  # file name for errors
                                                           # %j gets replaced by the job number
 
 ## project name
-NAME_DIR=seqmodel-seqbert-ft
+NAME_DIR=seqbert-ft-deepsea
+OUT_DIR=~/scratch/$NAME_DIR
+SRC_DIR=~/proj/$NAME_DIR
 
 ## on compute canada, scratch dir is for short term and home dir is for long term
 ## note: code below assumes scratch has been linked to home directory
@@ -39,10 +41,13 @@ mkdir $SLURM_TMPDIR/$NAME_DIR
 tar xzf ~/data/$NAME_DIR/*.tar.gz -C $SLURM_TMPDIR/$NAME_DIR
 
 ## make output dir if does not exist
-mkdir ~/scratch/$NAME_DIR/ft
+mkdir $OUT_DIR/$NAME_DIR/
 
+cd $SRC_DIR
 # hparams
 python src/exp/seqbert/finetune-deepsea.py \
+    --mode='test' \
+    --limit_test_batches=1000 \
     --n_dims=512 \
     --n_heads=4 \
     --n_layers=4 \
@@ -53,14 +58,14 @@ python src/exp/seqbert/finetune-deepsea.py \
     --batch_size=32 \
     --learning_rate=3e-4 \
     --seq_len=1000 \
-    --default_root_dir=~/scratch/$NAME_DIR \
+    --default_root_dir=$OUT_DIR/$NAME_DIR \
     --accumulate_grad_batches=1 \
     --print_progress_freq=500 \
     --save_checkpoint_freq=5000 \
     --train_mat=$SLURM_TMPDIR/$NAME_DIR/data/deepsea/train.mat \
     --valid_mat=$SLURM_TMPDIR/$NAME_DIR/data/deepsea/valid.mat \
     --test_mat=$SLURM_TMPDIR/$NAME_DIR/data/deepsea/test.mat \
-    --load_pretrained_model=./lightning_logs/version_55349874/checkpoints/fixed-N-Step-Checkpoint_0_260000.ckpt \
+    --load_pretrained_model=./lightning_logs/version_56082675/checkpoints/N-Step-Checkpoint_0_70000.ckpt \
 
     # --accumulate_grad_batches=1 \
 

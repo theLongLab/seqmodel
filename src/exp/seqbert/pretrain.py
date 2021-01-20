@@ -9,7 +9,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.core.lightning import LightningModule
 from pytorch_lightning import Trainer, seed_everything
 
-from exp.seqbert.model import SeqBERT, CheckpointEveryNSteps, PrintGradients
+from exp.seqbert.model import SeqBERT, CheckpointEveryNSteps
 from seqmodel.functional.mask import generate_mask, mask_randomize, mask_fill, mask_select
 from seqmodel.seqdata.mapseq import RandomRepeatSequence
 from seqmodel.seqdata.iterseq import StridedSequence, bed_from_file, FastaFile
@@ -229,7 +229,7 @@ def main():
         model = Pretrain.load_from_checkpoint(args.load_checkpoint_path, **vars(args))
     else:
         model = Pretrain(**vars(args))
-    args.callbacks = [CheckpointEveryNSteps(args.save_checkpoint_freq), PrintGradients()]
+    args.callbacks = [CheckpointEveryNSteps(args.save_checkpoint_freq)]
     trainer = Trainer.from_argparse_args(args)
     trainer.fit(model)
 
