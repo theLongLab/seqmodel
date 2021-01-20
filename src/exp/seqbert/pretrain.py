@@ -18,7 +18,7 @@ from seqmodel.functional.log import prediction_histograms, normalize_histogram, 
                             summarize, correct, accuracy_per_class, accuracy, \
                             summarize_weights_and_grads, tensor_stats_str
 from exp.seqbert import TOKENS_BP_IDX
-from exp.seqbert.model import SeqBERT, CheckpointEveryNSteps, PrintGradients, bool_to_tokens
+from exp.seqbert.model import SeqBERT, CheckpointEveryNSteps, bool_to_tokens
 
 
 class PretrainBatchProcessor():
@@ -300,7 +300,7 @@ def main():
         model = Pretrain.load_from_checkpoint(args.load_checkpoint_path, **vars(args))
     else:
         model = Pretrain(**vars(args))
-    args.callbacks = [CheckpointEveryNSteps(args.save_checkpoint_freq), PrintGradients()]
+    args.callbacks = [CheckpointEveryNSteps(args.save_checkpoint_freq)]
     trainer = Trainer.from_argparse_args(args)
     trainer.fit(model)
 
