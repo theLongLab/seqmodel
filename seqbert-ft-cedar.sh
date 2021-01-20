@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=4             # number of cores
 #SBATCH --gres=gpu:p100:1                 # type and number of GPU(s) per node
 #SBATCH --mem=16000                                       # max memory (default unit is MB) per node
-#SBATCH --output%j-deepseatest.out                 # file name for the output
+#SBATCH --output=%j-deepseatest.out                 # file name for the output
 #SBATCH --error=%j-deepseatest.err                  # file name for errors
                                                           # %j gets replaced by the job number
 
@@ -13,6 +13,7 @@
 NAME_DIR=seqbert-ft-deepsea
 OUT_DIR=~/scratch/$NAME_DIR
 SRC_DIR=~/proj/$NAME_DIR
+cd $SRC_DIR
 
 ## on compute canada, scratch dir is for short term and home dir is for long term
 ## note: code below assumes scratch has been linked to home directory
@@ -41,9 +42,8 @@ mkdir $SLURM_TMPDIR/$NAME_DIR
 tar xzf ~/data/$NAME_DIR/*.tar.gz -C $SLURM_TMPDIR/$NAME_DIR
 
 ## make output dir if does not exist
-mkdir $OUT_DIR/$NAME_DIR/
+mkdir $OUT_DIR/
 
-cd $SRC_DIR
 # hparams
 python src/exp/seqbert/finetune-deepsea.py \
     --mode='test' \
@@ -65,8 +65,10 @@ python src/exp/seqbert/finetune-deepsea.py \
     --train_mat=$SLURM_TMPDIR/$NAME_DIR/data/deepsea/train.mat \
     --valid_mat=$SLURM_TMPDIR/$NAME_DIR/data/deepsea/valid.mat \
     --test_mat=$SLURM_TMPDIR/$NAME_DIR/data/deepsea/test.mat \
-    --load_pretrained_model=./lightning_logs/version_56082675/checkpoints/N-Step-Checkpoint_0_70000.ckpt \
+    --load_checkpoint_path=./lightning_logs/version_56082675/checkpoints/N-Step-Checkpoint_0_70000.ckpt \
+    --test_out_file=$OUT_DIR/test-scores.pt \
 
+    # --load_pretrained_model=./lightning_logs/version_56082675/checkpoints/N-Step-Checkpoint_0_70000.ckpt \
     # --accumulate_grad_batches=1 \
 
 ## clean up by stopping virtualenv

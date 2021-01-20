@@ -59,10 +59,8 @@ class FineTuneDeepSEA(LightningModule):
         return torch.optim.Adam(self.model.parameters(), lr=self.hparams.learning_rate)
 
     def train_dataloader(self):
-        # train_data = MatFileSampler(self.hparams.train_mat, 'trainxdata', 'traindata',
-            # sequence_batch_axis=2, sequence_alphabet_axis=1, targets_batch_axis=1)
-        train_data = MatFileSampler(self.hparams.train_mat, 'validxdata', 'validdata',
-            sequence_batch_axis=0, sequence_alphabet_axis=1, targets_batch_axis=0)
+        train_data = MatFileSampler(self.hparams.train_mat, 'trainxdata', 'traindata',
+            sequence_batch_axis=2, sequence_alphabet_axis=1, targets_batch_axis=1)
         return MatFileDataset(train_data, self.hparams.batch_size, self.model.CLS_TOKEN)
 
     def val_dataloader(self):
@@ -106,10 +104,13 @@ class FineTuneDeepSEA(LightningModule):
         predicted, latent, embedded = self.model.forward(x)
         loss = self.loss_fn(predicted, target)
         self.test_results(predicted, target)
+        self.log('test_acc', self.train_acc(predicted.flatten(), target.flatten()), prog_bar=True)
+        self.log('test_roc', self.train_roc_auc(predicted.flatten(), target.flatten()), prog_bar=True)
         return loss
 
     def test_epoch_end(self, val_step_outputs):
         scores = self.test_results.compute()
+        print('Saving test scores to', self.hparams.test_out_file)
         torch.save(scores, self.hparams.test_out_file)
 
     @staticmethod
@@ -142,7 +143,7 @@ class FineTuneDeepSEA(LightningModule):
         parser.add_argument('--save_checkpoint_freq', default=1000, type=int)
         parser.add_argument('--load_checkpoint_path', default=None, type=str)
         parser.add_argument('--load_pretrained_model', default=None, type=str)
-        parser.add_argument('--test_out_file', default='outputs/test-scores.pt', type=str)
+        parser.add_argument('--test_out_file', default='./test-scores.pt', type=str)
         return parser
 
 

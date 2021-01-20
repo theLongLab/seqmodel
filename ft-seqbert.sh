@@ -16,8 +16,8 @@ python src/exp/seqbert/finetune-deepsea.py \
     --print_progress_freq=100 \
     --save_checkpoint_freq=1000 \
     --train_mat='data/deepsea/valid.mat' \
-    --limit_test_batches=10 \
     --gpus=0 \
+    --limit_test_batches=10 \
 
     # --valid_mat='data/deepsea/valid.mat' \
     # --test_mat='data/deepsea/test.mat' \

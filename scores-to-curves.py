@@ -24,13 +24,13 @@ def plot(prob, target, plot_pr=False, plot_roc=True):
                 ax.plot(recall, precision, c='b')
             if plot_roc:
                 fpr, tpr, _ = plmF.roc(p, t, pos_label=1)
-                roc_auc.append(plmF.classification.auc(fpr, tpr))
+                # roc_auc.append(plmF.classification.auc(fpr, tpr))
                 ax.plot(fpr, tpr, c='g')
     plt.show()
     return pr_auc, roc_auc
 
 def main():
-    filename = 'outputs/test-scores.pt'
+    filename = 'outputs/56082675-test-scores-1k.pt'
     scores = torch.load(filename)
     prob, target = scores_to_prob(scores)
     prob = prob.permute(1, 0)
