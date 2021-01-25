@@ -21,7 +21,7 @@ def bool_to_tokens(bool_tensor, target_tensor_type=torch.long):
 
 class SeqBERT(nn.Module):
 
-    def __init__(self, **hparams):
+    def __init__(self, classify_only=False, n_class=None, **hparams):
         super().__init__()
         self.tokens = TOKENS_BP  # may have different tokenizations in the future
         embedding = nn.Embedding(len(self.tokens), hparams['n_dims'])
@@ -40,15 +40,11 @@ class SeqBERT(nn.Module):
                     hparams['feedforward_dims'], hparams['dropout']),
                 hparams['n_layers'])
 
-        n_class = len(self.tokens)  # number of classes to decode to
-        if 'n_class' in hparams and hparams['n_class'] > 0:
-            n_class = hparams['n_class']
+        if n_class is None or n_class <= 0:
+            n_class = len(self.tokens)  # number of classes to decode to
         self.decoder = SeqFeedForward(hparams['n_dims'], n_class,
                         hidden_layers=hparams['n_decode_layers'] - 1, activation_fn=nn.ReLU)
-
-        self.classify_only = False  # whether to decode all positions or only first one
-        if ('mode' in hparams) and hparams['mode'] == 'classify':
-            self.classify_only = True
+        self.classify_only = classify_only  # whether to decode all positions or only first one
 
     def forward(self, x):
         # input dims are (batch, seq), embedding adds channel dim to end
@@ -57,8 +53,8 @@ class SeqBERT(nn.Module):
         # swap dimensions from (seq, batch, channel) to (batch, channels, seq_len)
         latent = self.transformer_encoder(embedded).permute(1, 2, 0)
         if self.classify_only:
-            latent = latent[:, :, 0:1]
-        predicted = self.decoder(latent)
+            latent = latent[:, :, 0:1]  # take index 0 of seq as target
+        predicted = self.decoder(latent).squeeze() # remove seq dim (dim=2)
         return predicted, latent, embedded
 
 
@@ -89,20 +85,24 @@ class VariantDecoder(SeqBERT):
 
 class SeqBERTLightningModule(LightningModule):
 
-    def __init__(self, ModelClass, **hparams):
+    def __init__(self, model, **hparams):
         super().__init__()
         self.save_hyperparameters()
-        self.model = ModelClass(**hparams)
+        self.model = model
         self.prev_loss = 10000.
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.model.parameters(), lr=self.hparams.learning_rate)
 
+    def load_pretrained_encoder(self, source_model):
+        self.model.embedding = source_model.embedding
+        self.model.transformer_encoder = source_model.transformer_encoder
+
     @staticmethod
     def add_model_specific_args(parent_parser):  # pragma: no-cover
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
         # model params
-        parser.add_argument('--n_class', default=1, type=int)
+        parser.add_argument('--mode', default='train', type=str)
         parser.add_argument('--n_dims', default=256, type=int)
         parser.add_argument('--n_heads', default=1, type=int)
         parser.add_argument('--n_layers', default=1, type=int)
@@ -111,7 +111,7 @@ class SeqBERTLightningModule(LightningModule):
         parser.add_argument('--dropout', default=0.1, type=float)
         parser.add_argument('--position_embedding', default='Sinusoidal', type=str)
         # training params
-        parser.add_argument('--seq_len', default=500, type=int)
+        parser.add_argument('--seq_len', default=1000, type=int)
         parser.add_argument('--num_workers', default=0, type=int)
         parser.add_argument('--batch_size', default=64, type=int)
         parser.add_argument('--learning_rate', default=1e-3, type=float)
@@ -120,6 +120,7 @@ class SeqBERTLightningModule(LightningModule):
         parser.add_argument('--save_checkpoint_freq', default=1000, type=int)
         parser.add_argument('--load_checkpoint_path', default=None, type=str)
         parser.add_argument('--load_pretrained_model', default=None, type=str)
+        parser.add_argument('--test_out_file', default='./test-scores.pt', type=str)
         return parser
 
 
@@ -161,6 +162,28 @@ class CheckpointEveryNSteps(pl.Callback):
             print("Saving to", ckpt_path)
             trainer.save_checkpoint(ckpt_path)
 
+"""
+Note: do not run on multi-GPU (no reduce function defined)
+"""
+class BinaryPredictTensorMetric(pl.metrics.Metric):
+
+    def __init__(self, dim=0):
+        super().__init__(dist_sync_on_step=False)
+        self.cat_along_dim = dim
+        self.add_state("score", default=[], dist_reduce_fx=None)
+
+    def update(self, preds: torch.Tensor, target: torch.Tensor):
+        assert preds.shape == target.shape
+        score = target - torch.sigmoid(preds)
+        score = score.detach().cpu()
+        if self.score == []:
+            self.score = score
+        else:
+            self.score = torch.cat([self.score, score], dim=self.cat_along_dim)
+
+    def compute(self):
+        return self.score
+
 
 class PrintGradients(pl.Callback):
     def __init__(self):
@@ -171,31 +194,24 @@ class PrintGradients(pl.Callback):
         print(args, kwargs)
 
 
-def load_pretrained_encoder(source_model, target_model):
-    target_model.embedding = source_model.embedding
-    target_model.transformer_encoder = source_model.transformer_encoder
-
-def main(ModelClass, is_classifier=True):
+def main(ModuleClass):
     parent_parser = ArgumentParser(add_help=False)
-    parser = ModelClass.add_model_specific_args(parent_parser)
+    parser = ModuleClass.add_model_specific_args(parent_parser)
     parser = Trainer.add_argparse_args(parser)
     parser.set_defaults(gpus=1)
     args = parser.parse_args()
 
     seed_everything(0)
     # defaults
-    args.mode = 'all'
-    if is_classifier:
-        args.mode = 'classify'
     print(vars(args))
     if args.load_checkpoint_path is not None:
-        model = ModelClass.load_from_checkpoint(args.load_checkpoint_path, **vars(args))
+        model = ModuleClass.load_from_checkpoint(args.load_checkpoint_path, **vars(args))
     elif args.load_pretrained_model is not None:
-        model = ModelClass(**vars(args))
-        pretrained = ModelClass.load_from_checkpoint(args.load_pretrained_model)
-        load_pretrained_encoder(pretrained, model)
+        model = ModuleClass(**vars(args))
+        pretrained = ModuleClass.load_from_checkpoint(args.load_pretrained_model)
+        pretrained.load_pretrained_encoder( model)
     else:
-        model = ModelClass(**vars(args))
+        model = ModuleClass(**vars(args))
     args.callbacks = [
         CheckpointEveryNSteps(args.save_checkpoint_freq),
         # PrintGradients(),
@@ -203,4 +219,7 @@ def main(ModelClass, is_classifier=True):
     if args.gpus > 0:
         args.callbacks.append(GPUStatsMonitor())
     trainer = Trainer.from_argparse_args(args)
-    trainer.fit(model)
+    if args.mode == 'train':
+        trainer.fit(model)
+    elif args.mode == 'test':
+        trainer.test(model)

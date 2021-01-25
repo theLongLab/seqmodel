@@ -23,6 +23,7 @@ python src/exp/seqbert/pretrain.py \
     --accumulate_grad_batches=8 \
     --print_progress_freq=100 \
     --save_checkpoint_freq=1000 \
+    --gpus=0 \
     # --load_checkpoint_path=$OUT_DIR/lightning_logs/version_53753746/checkpoints/N-Step-Checkpoint_0_85000.ckpt \
     # --seq_file=data/ref_genome/test-2k.fa \
     # --DEBUG_use_random_data=False \

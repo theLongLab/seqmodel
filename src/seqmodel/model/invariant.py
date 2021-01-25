@@ -59,7 +59,6 @@ class v2GroupConv1d(nn.Conv1d):
                 ], dim=0)
         y_all = super(v2GroupConv1d, self).forward(x_all)
         y = y_all.view(x.shape[0], self.out_channels * 4, -1)
-        print(y.shape)
         y, y_rc, y_r, y_c = torch.split(y, y.shape[1] // 4, dim=1)
         return torch.cat([
                 y,

@@ -113,7 +113,7 @@ Pytorch-Lightning
 
 Default Command Line Arguments
 ------------------------------
-These are for pytorch-lightning only, see individual model files (e.g. `src/experiment/seqbert.py`) for model-specific arguments.
+These are for pytorch-lightning only, see individual model files (e.g. `src/exp/seqbert/pretrain.py`) for model-specific arguments.
 
 - accumulate_grad_batches=1
 - amp_backend='native'

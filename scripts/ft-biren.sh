@@ -1,6 +1,7 @@
 #!/bin/bash
 
 python src/exp/seqbert/finetune_biren.py \
+    --mode='train' \
     --n_dims=128 \
     --n_heads=2 \
     --n_layers=2 \
@@ -15,3 +16,4 @@ python src/exp/seqbert/finetune_biren.py \
     --accumulate_grad_batches=1 \
     --print_progress_freq=100 \
     --save_checkpoint_freq=1000 \
+    --gpus=0 \

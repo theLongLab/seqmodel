@@ -18,8 +18,8 @@ from seqmodel.functional.log import prediction_histograms, normalize_histogram, 
                             summarize, correct, accuracy_per_class, accuracy, \
                             summarize_weights_and_grads, tensor_stats_str
 from exp.seqbert import TOKENS_BP_IDX
-from exp.seqbert.model import SeqBERT, CheckpointEveryNSteps, \
-                            PrintGradients, bool_to_tokens, main
+from exp.seqbert.model import SeqBERT, SeqBERTLightningModule, \
+                            CheckpointEveryNSteps, bool_to_tokens, main
 
 
 class PretrainBatchProcessor():
@@ -95,7 +95,7 @@ class PretrainBatchProcessor():
         return (source, target, mask), (key, torch.tensor(coord))  # send this to GPU
 
 
-class Pretrain(LightningModule):
+class Pretrain(SeqBERTLightningModule):
 
     # for mask
     NO_LOSS_INDEX = 0
@@ -104,9 +104,8 @@ class Pretrain(LightningModule):
     KEEP_INDEX = 3
 
     def __init__(self, **hparams):
-        super().__init__()
-        self.save_hyperparameters()
-        self.model = SeqBERT(**hparams)
+        model = SeqBERT(**hparams)
+        super().__init__(model, **hparams)
         self.loss_fn = nn.CrossEntropyLoss()
         self.cls_loss_fn = nn.CrossEntropyLoss()
         self.prev_loss = 10000.
@@ -176,7 +175,6 @@ class Pretrain(LightningModule):
     def training_step(self, x, batch_idx):
         batch, (seqname, coord) = x
         loss, pred_loss, cls_loss, predicted, latent, source, target, mask, embedded = self.masked_forward(batch)
-        print('pred: %2.4f cls: %2.4f' % (pred_loss.item(), cls_loss.item()))
         # if batch_idx > 1000 and loss > 2.2:
         #     print(loss, self.prev_loss)
         #     self.print_progress(loss, predicted, latent, source, target, mask, embedded, seqname, coord, include_grad=True)
@@ -184,16 +182,9 @@ class Pretrain(LightningModule):
         self.prev_loss = loss.item()
         if batch_idx % self.hparams.print_progress_freq == 0:
             self.print_progress(loss, predicted, latent, source, target, mask, embedded, seqname, coord, include_grad=True)
-        return {'loss': loss, #'seqname': seqname[-1], 'coord': coord[-1],
-                'log': {'train_loss': loss,} #'seqname': seqname[-1], 'coord': coord[-1],},
-                }
-
-    def accuracy_by_type():
-        pass # TODO
-        # mask_select(predicted, mask == self.MASK_INDEX)
-        # mask_select(predicted, mask == self.RANDOM_INDEX)
-        # mask_select(predicted, mask == self.KEEP_INDEX)
-        # mask_select(predicted, mask == self.NO_LOSS_INDEX)
+        self.log('mask_loss', pred_loss.item(), prog_bar=True)
+        self.log('class_loss', cls_loss.item(), prog_bar=True)
+        return loss
 
     def print_progress(self, loss, predicted, latent, source, target, mask, embedded, seqname, coord, include_grad=False):
         str_train_sample = summarize(
@@ -231,12 +222,9 @@ class Pretrain(LightningModule):
         loss, pred_loss, cls_loss, predicted, latent, source, target, mask, embedded = self.masked_forward(x)
         if batch_idx % self.hparams.print_progress_freq == 0:
             self.print_progress(loss, predicted, latent, source, target, mask, embedded, seqname, coord)
-        return {'loss': loss,
-                'log': {
-                    'val_loss': loss,
-                    # 'correct': acc_numbers,
-                    # 'train_sample': str_train_sample,
-                }}
+        self.log('val_mask_loss', pred_loss.item(), prog_bar=True)
+        self.log('val_class_loss', cls_loss.item(), prog_bar=True)
+        return loss
 
     # def validation_epoch_end(self, val_step_outputs):
     #     result = pl.EvalResult(checkpoint_on=loss)
@@ -244,40 +232,25 @@ class Pretrain(LightningModule):
 
     @staticmethod
     def add_model_specific_args(parent_parser):  # pragma: no-cover
+        super_parser = SeqBERTLightningModule.add_model_specific_args(parent_parser)
+        parser = ArgumentParser(parents=[super_parser])
         """
         Define parameters that only apply to this model
         """
-        parser = ArgumentParser(parents=[parent_parser])
         # model params
-        parser.add_argument('--n_dims', default=256, type=int)
-        parser.add_argument('--n_heads', default=1, type=int)
-        parser.add_argument('--n_layers', default=1, type=int)
-        parser.add_argument('--n_decode_layers', default=1, type=int)
-        parser.add_argument('--feedforward_dims', default=512, type=int)
-        parser.add_argument('--dropout', default=0.1, type=float)
         parser.add_argument('--cls_regularization', default=1., type=float)
-        parser.add_argument('--position_embedding', default='Sinusoidal', type=str)
-
         # training params
         parser.add_argument('--keep_prop', default=0.05, type=float)
         parser.add_argument('--mask_prop', default=0.08, type=float)
         parser.add_argument('--random_prop', default=0.02, type=float)
-        parser.add_argument('--num_workers', default=0, type=int)
-        parser.add_argument('--batch_size', default=64, type=int)
-        parser.add_argument('--learning_rate', default=1e-3, type=float)
-
         # data params
         parser.add_argument('--seq_file', default='data/ref_genome/p12/assembled_chr/GRCh38_p12_assembled_chr.fa', type=str)
         parser.add_argument('--train_intervals', default=None, type=str)
         parser.add_argument('--valid_intervals', default=None, type=str)
-        parser.add_argument('--seq_len', default=500, type=int)
         parser.add_argument('--seq_len_source_multiplier', default=2., type=float)  # how much length to add when loading
         parser.add_argument('--crop_factor', default=0.2, type=float)  # how much of source sequence to keep when cropping
         parser.add_argument('--seq_len_sample_freq', default=0.5, type=float)  # gives sample_freq in StridedSequence
-
-        parser.add_argument('--print_progress_freq', default=1000, type=int)
-        parser.add_argument('--save_checkpoint_freq', default=1000, type=int)
-        parser.add_argument('--load_checkpoint_path', default=None, type=str)
+        # debug task params
         parser.add_argument('--DEBUG_use_random_data', default=False, type=bool)
         parser.add_argument('--DEBUG_random_repeat_len', default=1, type=int)
         parser.add_argument('--DEBUG_random_n_repeats', default=500, type=int)
@@ -285,4 +258,4 @@ class Pretrain(LightningModule):
 
 
 if __name__ == '__main__':
-    main(Pretrain, is_classifier=False)
+    main(Pretrain)

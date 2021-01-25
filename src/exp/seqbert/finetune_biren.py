@@ -7,12 +7,14 @@ import torch.nn as nn
 from torch.utils.data import IterableDataset
 from pytorch_lightning.core.lightning import LightningModule
 from pytorch_lightning import Trainer, seed_everything
+import pytorch_lightning as pl
 
 from seqmodel.functional import bioseq_to_index, random_crop, random_seq_fill
 from seqmodel.functional.log import roc_auc
 from seqmodel.seqdata.iterseq import StridedSequence, FastaFile, bed_from_file
 from exp.seqbert import TOKENS_BP_IDX
-from exp.seqbert.model import SeqBERT, CheckpointEveryNSteps, PrintGradients, main
+from exp.seqbert.model import SeqBERT, SeqBERTLightningModule, \
+            CheckpointEveryNSteps, BinaryPredictTensorMetric, main
 from exp.seqbert.pretrain import Pretrain
 
 
@@ -39,20 +41,22 @@ class LabelRadomizer():
         return (is_positive, is_human, seqname, coord + coord_start)
 
 
-class FineTuneBiRen(LightningModule):
+class FineTuneBiRen(SeqBERTLightningModule):
 
     def __init__(self, **hparams):
-        super().__init__()
-        self.save_hyperparameters()
-        self.model = SeqBERT(**hparams)
+        model = SeqBERT(classify_only=True, n_class=1, **hparams)
+        super().__init__(model, **hparams)
         self.loss_fn = nn.BCEWithLogitsLoss()
-        self.fasta = FastaFile(self.hparams.seq_file)
         self.hparams.sample_freq = int(self.hparams.seq_len * self.hparams.seq_len_sample_freq)
         self.hparams.min_len = int(self.hparams.seq_len * self.hparams.crop_factor)
 
-    def load_pretrained_model(self, seqbert_obj):
-        self.model.embedding = seqbert_obj.embedding
-        self.model.transformer_encoder = seqbert_obj.transformer_encoder
+        self.train_acc = pl.metrics.Accuracy(threshold=0)
+        self.train_roc_auc = pl.metrics.functional.classification.auroc
+        self.auc_fn = pl.metrics.functional.classification.auc
+        self.val_acc = pl.metrics.Accuracy(threshold=0, compute_on_step=False)
+        self.val_pr_curve = pl.metrics.PrecisionRecallCurve(compute_on_step=False, pos_label=1)
+        self.val_roc_curve = pl.metrics.classification.ROC(compute_on_step=False, pos_label=1)
+        self.test_results = BinaryPredictTensorMetric()
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.model.parameters(), lr=self.hparams.learning_rate)
@@ -92,75 +96,68 @@ class FineTuneBiRen(LightningModule):
     def test_dataloader(self):
         return self.get_dataloader(True, self.hparams.test_intervals)
 
-    def print_progress(self, predicted, target, x, is_human, seqname, coord):
-        print(seqname, coord, is_human, 'roc', roc_auc(torch.sigmoid(predicted.squeeze()), target))
-
     def training_step(self, batch, batch_idx):
         x, (is_positive, is_human, seqname, coord) = batch
         target = is_positive.float()
         predicted, latent, embedded = self.model.forward(x)
-        # remove dim 2 (seq) from predicted
-        loss = self.loss_fn(predicted.squeeze(), target)
-        if batch_idx % self.hparams.print_progress_freq == 0:
-            self.print_progress(predicted, target, x, is_human, seqname, coord)
-        return {'loss': loss, #'seqname': seqname[-1], 'coord': coord[-1],
-                'log': {'train_loss': loss,} #'seqname': seqname[-1], 'coord': coord[-1],},
-                }
+        loss = self.loss_fn(predicted, target)
+        self.log('tr_acc', self.train_acc(predicted, target), prog_bar=True)
+        self.log('tr_roc', self.train_roc_auc(predicted, target), prog_bar=True)
+        self.log('tr_roc_old',roc_auc(torch.sigmoid(predicted.squeeze()), target), prog_bar=True)
+        return loss
 
     def validation_step(self, batch, batch_idx):
         x, (is_positive, is_human, seqname, coord) = batch
         target = is_positive.to(torch.float)
         predicted, latent, embedded = self.model.forward(x)
-        # remove dim 2 (seq) from predicted
-        loss = self.loss_fn(predicted.squeeze(), target)
-        # if batch_idx % self.hparams.print_progress_freq == 0:
-        print('Validation')
-        self.print_progress(predicted, target, x, is_human, seqname, coord)
-        return {'loss': loss,
-                'log': {
-                    'val_loss': loss,
-                    # 'correct': acc_numbers,
-                    # 'train_sample': str_train_sample,
-                }}
+        loss = self.loss_fn(predicted, target)
+        self.val_pr_curve(predicted, target)
+        self.val_roc_curve(predicted, target)
+        return loss
+
+    def validation_epoch_end(self, val_step_outputs):
+        self.log('val_acc', self.val_acc.compute())
+        precision, recall, _ = self.val_pr_curve.compute()
+        self.log('val_pr', self.auc_fn(recall, precision), prog_bar=True)
+        fpr, tpr, _ = self.val_roc_curve.compute()
+        self.log('val_roc', self.auc_fn(fpr, tpr), prog_bar=True)
+    
+    def test_step(self, batch, batch_idx):
+        x, (is_positive, is_human, seqname, coord) = batch
+        target = is_positive.to(torch.float)
+        predicted, latent, embedded = self.model.forward(x)
+        loss = self.loss_fn(predicted, target)
+        self.test_results(predicted, target)
+        try:
+            print(self.train_roc_auc(predicted.flatten(), target.flatten()).item())
+        except:
+            pass
+        return loss
+
+    def test_epoch_end(self, val_step_outputs):
+        scores = self.test_results.compute()
+        print('Saving test scores to', self.hparams.test_out_file)
+        torch.save(scores, self.hparams.test_out_file)
 
     @staticmethod
-    def add_model_specific_args(parent_parser):  # pragma: no-cover
+    def add_model_specific_args(parent_parser):
+        super_parser = SeqBERTLightningModule.add_model_specific_args(parent_parser)
+        parser = ArgumentParser(parents=[super_parser])
         """
         Define parameters that only apply to this model
         """
-        parser = ArgumentParser(parents=[parent_parser])
-        # model params
-        parser.add_argument('--n_class', default=1, type=int)
-        parser.add_argument('--n_dims', default=256, type=int)
-        parser.add_argument('--n_heads', default=1, type=int)
-        parser.add_argument('--n_layers', default=1, type=int)
-        parser.add_argument('--n_decode_layers', default=1, type=int)
-        parser.add_argument('--feedforward_dims', default=512, type=int)
-        parser.add_argument('--dropout', default=0.1, type=float)
-        parser.add_argument('--position_embedding', default='Sinusoidal', type=str)
-
-        # training params
-        parser.add_argument('--batch_size', default=64, type=int)
-        parser.add_argument('--learning_rate', default=1e-3, type=float)
-        parser.add_argument('--num_workers', default=0, type=int)
-
         #data params
         parser.add_argument('--seq_file', default='data/vista/all-enhancers.fa', type=str)
         parser.add_argument('--train_intervals', default='data/vista/human-enhancers-train.bed', type=str)
         parser.add_argument('--valid_intervals', default='data/vista/human-enhancers-valid.bed', type=str)
         parser.add_argument('--test_intervals', default='data/vista/human-enhancers-test.bed', type=str)
-        parser.add_argument('--seq_len', default=1000, type=int)
         parser.add_argument('--seq_len_source_multiplier', default=2., type=float)  # how much length to add when loading
         parser.add_argument('--crop_factor', default=0.2, type=float)  # gives min_len as a proportion of seq_len
         parser.add_argument('--seq_len_sample_freq', default=0.5, type=float)  # gives sample_freq in StridedSequence
-        parser.add_argument('--print_progress_freq', default=1000, type=int)
-        parser.add_argument('--save_checkpoint_freq', default=1000, type=int)
-        parser.add_argument('--load_checkpoint_path', default=None, type=str)
-        parser.add_argument('--load_pretrained_model', default=None, type=str)
         parser.add_argument('--train_randomize_prop', default=0., type=float)
         parser.add_argument('--valid_randomize_prop', default=0., type=float)
         return parser
 
 
 if __name__ == '__main__':
-    main(FineTuneBiRen, is_classifier=True)
+    main(FineTuneBiRen)

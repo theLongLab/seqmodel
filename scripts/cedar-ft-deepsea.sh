@@ -1,13 +1,13 @@
 #!/bin/bash
-#SBATCH --job-name=seqbert-ft-deepsea
-#SBATCH --account=def-quanlong          # needed for resource billing if using compute canada
-#SBATCH --time=2:00:00                  # max walltime in D-HH:MM or HH:MM:SS
-#SBATCH --cpus-per-task=4               # number of cores
-#SBATCH --gres=gpu:p100:1               # type and number of GPU(s) per node
-#SBATCH --mem=16000                     # max memory (default unit is MB) per node
-#SBATCH --output=seqbert-ft-deepsea-%j.out  # file name for the output
-#SBATCH --error=seqbert-ft-deepsea-%j.err   # file name for errors
-                                        # %j gets replaced by the job number
+#SBATCH --job-name=seqbert-ft
+#SBATCH --account=def-quanlong            # needed for resource billing if using compute canada
+#SBATCH --time=2:00:00                           # max walltime in D-HH:MM or HH:MM:SS
+#SBATCH --cpus-per-task=4             # number of cores
+#SBATCH --gres=gpu:p100:1                 # type and number of GPU(s) per node
+#SBATCH --mem=16000                                       # max memory (default unit is MB) per node
+#SBATCH --output=%j-deepseatest.out                 # file name for the output
+#SBATCH --error=%j-deepseatest.err                  # file name for errors
+                                                          # %j gets replaced by the job number
 
 ## project name
 NAME_DIR=seqbert-ft-deepsea     # task name
@@ -39,6 +39,8 @@ tar xzf $DATA_DIR/*.tar.gz -C $RUN_DIR
 
 # hparams
 python ./src/exp/seqbert/finetune_deepsea.py \
+    --mode='test' \
+    --limit_test_batches=1000 \
     --n_dims=512 \
     --n_heads=4 \
     --n_layers=4 \
@@ -56,8 +58,9 @@ python ./src/exp/seqbert/finetune_deepsea.py \
     --train_mat=$RUN_DIR/data/deepsea/train.mat \
     --valid_mat=$RUN_DIR/data/deepsea/valid.mat \
     --test_mat=$RUN_DIR/data/deepsea/test.mat \
-    --load_pretrained_model=./lightning_logs/version_55349874/checkpoints/fixed-N-Step-Checkpoint_0_260000.ckpt \
+    --load_checkpoint_path=../lightning_logs/version_56082675/checkpoints/N-Step-Checkpoint_0_70000.ckpt \
 
+#    --load_pretrained_model=../lightning_logs/version_55349874/checkpoints/fixed-N-Step-Checkpoint_0_260000.ckpt \
     # --accumulate_grad_batches=1 \
 
 ## clean up by stopping virtualenv

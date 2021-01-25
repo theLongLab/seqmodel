@@ -4,22 +4,25 @@ from argparse import ArgumentParser
 import torch
 import torch.nn as nn
 from torch.utils.data import IterableDataset
+import pytorch_lightning as pl
 from pytorch_lightning.core.lightning import LightningModule
 from pytorch_lightning import Trainer, seed_everything
 
 from seqmodel.functional import one_hot_to_index
 from seqmodel.functional.log import roc_auc
 from selene.mat_file_sampler import MatFileSampler
-from exp.seqbert.model import SeqBERT, CheckpointEveryNSteps, PrintGradients, main
+from exp.seqbert import TOKENS_BP_IDX
+from exp.seqbert.model import SeqBERT, SeqBERTLightningModule, \
+            CheckpointEveryNSteps, BinaryPredictTensorMetric, main
 from exp.seqbert.pretrain import Pretrain
 
 
 class MatFileDataset(IterableDataset):
 
-    def __init__(self, sampler, batch_size, cls_token):
+    def __init__(self, sampler, batch_size):
         self.sampler = sampler
         self.batch_size = batch_size
-        self.cls_token = cls_token
+        self.cls_token = TOKENS_BP_IDX['~']
 
     def __iter__(self):
         for _ in range(self.sampler.n_samples):
@@ -34,13 +37,20 @@ class MatFileDataset(IterableDataset):
             yield seq, target  # (batch, seq, channel) and (batch, channel)
 
 
-class FineTuneDeepSEA(LightningModule)
+class FineTuneDeepSEA(SeqBERTLightningModule):
 
     def __init__(self, **hparams):
-        super().__init__()
-        self.save_hyperparameters()
-        self.model = SeqBERT(**hparams)
+        model = SeqBERT(classify_only=True, n_class=919, **hparams)
+        super().__init__(model, **hparams)
         self.loss_fn = nn.BCEWithLogitsLoss()
+
+        self.train_acc = pl.metrics.Accuracy(threshold=0)
+        self.train_roc_auc = pl.metrics.functional.classification.auroc
+        self.auc_fn = pl.metrics.functional.classification.auc
+        self.val_acc = pl.metrics.Accuracy(threshold=0, compute_on_step=False)
+        self.val_pr_curve = pl.metrics.PrecisionRecallCurve(compute_on_step=False, pos_label=1)
+        self.val_roc_curve = pl.metrics.classification.ROC(compute_on_step=False, pos_label=1)
+        self.test_results = BinaryPredictTensorMetric()
 
     def load_pretrained_model(self, seqbert_obj):
         self.model.embedding = seqbert_obj.embedding
@@ -52,81 +62,71 @@ class FineTuneDeepSEA(LightningModule)
     def train_dataloader(self):
         train_data = MatFileSampler(self.hparams.train_mat, 'trainxdata', 'traindata',
             sequence_batch_axis=2, sequence_alphabet_axis=1, targets_batch_axis=1)
-        return MatFileDataset(train_data, self.hparams.batch_size, self.model.CLS_TOKEN)
+        return MatFileDataset(train_data, self.hparams.batch_size)
 
     def val_dataloader(self):
         valid_data = MatFileSampler(self.hparams.valid_mat, 'validxdata', 'validdata',
             sequence_batch_axis=0, sequence_alphabet_axis=1, targets_batch_axis=0, shuffle=False)
-        return MatFileDataset(valid_data, self.hparams.batch_size, self.model.CLS_TOKEN)
+        return MatFileDataset(valid_data, self.hparams.batch_size)
 
     def test_dataloader(self):
         test_data = MatFileSampler(self.hparams.test_mat, 'testxdata', 'testdata',
             sequence_batch_axis=0, sequence_alphabet_axis=1, targets_batch_axis=0, shuffle=False)
-        return MatFileDataset(test_data, self.hparams.batch_size, self.model.CLS_TOKEN)
+        return MatFileDataset(test_data, self.hparams.batch_size)
 
     def training_step(self, batch, batch_idx):
         x, target = batch
         predicted, latent, embedded = self.model.forward(x)
-        loss = self.loss_fn(predicted.squeeze(), target)
-        if batch_idx % self.hparams.print_progress_freq == 0:
-            self.print_progress(predicted, target, x)
-        return {'loss': loss, #'seqname': seqname[-1], 'coord': coord[-1],
-                'log': {'train_loss': loss,} #'seqname': seqname[-1], 'coord': coord[-1],},
-                }
+        loss = self.loss_fn(predicted, target)
+        self.log('tr_acc', self.train_acc(predicted.flatten(), target.flatten()), prog_bar=True)
+        self.log('tr_roc', self.train_roc_auc(predicted.flatten(), target.flatten()), prog_bar=True)
+        return loss
 
-    def print_progress(self, predicted, target, x):
-        print('roc', roc_auc(torch.sigmoid(predicted.squeeze()), target))
+    def training_epoch_end(self, outs):
+        self.log('train_acc_epoch', self.train_acc.compute())
 
     def validation_step(self, batch, batch_idx):
         x, target = batch
         predicted, latent, embedded = self.model.forward(x)
-        # remove dim 2 (seq) from predicted
-        loss = self.loss_fn(predicted.squeeze(), target)
-        if batch_idx % self.hparams.print_progress_freq == 0:
-            print('Validation')
-            self.print_progress(predicted, target, x)
-        return {'loss': loss,
-                'log': {
-                    'val_loss': loss,
-                    # 'correct': acc_numbers,
-                    # 'train_sample': str_train_sample,
-                }}
+        loss = self.loss_fn(predicted, target)
+        self.val_pr_curve(predicted.flatten(), target.flatten())
+        self.val_roc_curve(predicted.flatten(), target.flatten())
+        return loss
 
-    # def validation_epoch_end(self, val_step_outputs):
-    #     result = pl.EvalResult(checkpoint_on=loss)
-    #     result.log('val_loss', loss)
+    def validation_epoch_end(self, val_step_outputs):
+        self.log('val_acc', self.val_acc.compute())
+        precision, recall, _ = self.val_pr_curve.compute()
+        self.log('val_pr', self.auc_fn(recall, precision), prog_bar=True)
+        fpr, tpr, _ = self.val_roc_curve.compute()
+        self.log('val_roc', self.auc_fn(fpr, tpr), prog_bar=True)
+    
+    def test_step(self, batch, batch_idx):
+        x, target = batch
+        predicted, latent, embedded = self.model.forward(x)
+        loss = self.loss_fn(predicted, target)
+        self.test_results(predicted, target)
+        self.log('test_acc', self.train_acc(predicted.flatten(), target.flatten()), prog_bar=True)
+        self.log('test_roc', self.train_roc_auc(predicted.flatten(), target.flatten()), prog_bar=True)
+        return loss
+
+    def test_epoch_end(self, val_step_outputs):
+        scores = self.test_results.compute()
+        print('Saving test scores to', self.hparams.test_out_file)
+        torch.save(scores, self.hparams.test_out_file)
 
     @staticmethod
-    def add_model_specific_args(parent_parser):  # pragma: no-cover
+    def add_model_specific_args(parent_parser):
+        super_parser = SeqBERTLightningModule.add_model_specific_args(parent_parser)
+        parser = ArgumentParser(parents=[super_parser])
         """
         Define parameters that only apply to this model
         """
-        parser = ArgumentParser(parents=[parent_parser])
-        # model params
-        parser.add_argument('--n_class', default=919, type=int)
-        parser.add_argument('--n_dims', default=256, type=int)
-        parser.add_argument('--n_heads', default=1, type=int)
-        parser.add_argument('--n_layers', default=1, type=int)
-        parser.add_argument('--n_decode_layers', default=1, type=int)
-        parser.add_argument('--feedforward_dims', default=512, type=int)
-        parser.add_argument('--dropout', default=0.1, type=float)
-        parser.add_argument('--position_embedding', default='Sinusoidal', type=str)
-
-        # training params
-        parser.add_argument('--batch_size', default=64, type=int)
-        parser.add_argument('--learning_rate', default=1e-3, type=float)
-
         #data params
         parser.add_argument('--train_mat', default='data/deepsea/train.mat', type=str)
         parser.add_argument('--valid_mat', default='data/deepsea/valid.mat', type=str)
         parser.add_argument('--test_mat', default='data/deepsea/test.mat', type=str)
-        parser.add_argument('--seq_len', default=1000, type=int)
-        parser.add_argument('--print_progress_freq', default=1000, type=int)
-        parser.add_argument('--save_checkpoint_freq', default=1000, type=int)
-        parser.add_argument('--load_checkpoint_path', default=None, type=str)
-        parser.add_argument('--load_pretrained_model', default=None, type=str)
         return parser
 
 
 if __name__ == '__main__':
-    main(FineTuneDeepSEA, is_classifier=True)
+    main(FineTuneDeepSEA)

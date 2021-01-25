@@ -82,7 +82,6 @@ def gen_variants(mutation_model, sequence, key, coord,
         prob_cutoffs[..., omit_indexes] = 0.
     cumulative = torch.sum(uniform < prob_cutoffs, dim=0).to(torch.long)
     indexes = torch.nonzero(cumulative, as_tuple=True)[0]
-    print(indexes.shape)
     n_variants = indexes.size(-1)
 
     n_required = min_variants - n_variants

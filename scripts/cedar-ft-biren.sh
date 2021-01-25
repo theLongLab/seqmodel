@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=seqbert-ft-biren
+#SBATCH --job-name=ft-biren
 #SBATCH --account=def-quanlong          # needed for resource billing if using compute canada
 #SBATCH --time=2:00:00                  # max walltime in D-HH:MM or HH:MM:SS
 #SBATCH --cpus-per-task=4               # number of cores
 #SBATCH --gres=gpu:p100:1               # type and number of GPU(s) per node
 #SBATCH --mem=16000                     # max memory (default unit is MB) per node
-#SBATCH --output=seqbert-ft-biren-%j.out  # file name for the output
-#SBATCH --error=seqbert-ft-biren-%j.err   # file name for errors
+#SBATCH --output=%j-ft-biren.out  # file name for the output
+#SBATCH --error=%j-ft-biren.err   # file name for errors
                                         # %j gets replaced by the job number
 
 ## project name
@@ -39,6 +39,8 @@ tar xzf $DATA_DIR/*.tar.gz -C $RUN_DIR
 
 # hparams
 python ./src/exp/seqbert/finetune_biren.py \
+    --mode='test' \
+    --max_epochs=30 \
     --n_dims=512 \
     --n_heads=4 \
     --n_layers=4 \
@@ -54,15 +56,18 @@ python ./src/exp/seqbert/finetune_biren.py \
     --save_checkpoint_freq=5000 \
     --num_workers=8 \
     --seq_file=$RUN_DIR/data/vista/all-enhancers.fa \
-    --train_intervals=$DATA_DIR/by-chr-train.bed \
-    --valid_intervals=$DATA_DIR/by-chr-valid.bed \
-    --test_intervals=$DATA_DIR/by-chr-valid.bed \
+    --train_intervals=$DATA_DIR/human-enhancers-train.bed \
+    --valid_intervals=$DATA_DIR/human-enhancers-valid.bed \
+    --test_intervals=$DATA_DIR/human-enhancers-test.bed \
     --seq_len_source_multiplier=2. \
     --crop_factor=0.3 \
     --seq_len_sample_freq=0.25 \
     --train_randomize_prop=0. \
     --load_pretrained_model=../lightning_logs/version_58642373/checkpoints/N-Step-Checkpoint_0_170000.ckpt \
 
+    # --train_intervals=$DATA_DIR/by-chr-train.bed \
+    # --valid_intervals=$DATA_DIR/by-chr-valid.bed \
+    # --test_intervals=$DATA_DIR/by-chr-valid.bed \
     # --load_checkpoint_path='' \
     # --accumulate_grad_batches=1 \
 
