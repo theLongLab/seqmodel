@@ -204,19 +204,20 @@ def isfloat(tensor):
     return tensor.dtype == torch.float16 or tensor.dtype == torch.bfloat16 or \
             tensor.dtype == torch.float32 or tensor.dtype == torch.float64
 
-def summarize_weights_and_grads(module_dict, include_grad=False, threshold_trigger=0.):
+def summarize_weights_and_grads(module, include_grad=False, threshold=0., grad_threshold=0.):
     output_str = ''
     do_output = False
-    for name, module in module_dict.items():
-        output_str += str(name) + str(module)
-        for param in module.parameters():
-            if torch.abs(torch.max(param)).item() > threshold_trigger \
-                    or torch.abs(torch.min(param)).item() > threshold_trigger:
+    for name, param in module.named_parameters():
+        if torch.max(torch.abs(param)).item() > threshold \
+            or (include_grad and torch.max(torch.abs(param.grad)).item() > grad_threshold):
                 do_output = True
-            output_str += str(param.shape) + tensor_stats_str(param, include_grad=include_grad) + '\n'
+                output_str += '{:25.25s} {:15.15s} {:50s}\n'.format(
+                            name, str(list(param.shape)),
+                            tensor_stats_str(param, include_grad=include_grad))
     if do_output:
-        return output_str + '\n'
-    return ''
+        return output_str
+    else:
+        return None
 
 def get_stats(tensor):
     std, mean = torch.std_mean(tensor)

@@ -18,7 +18,7 @@ from seqmodel.functional.log import prediction_histograms, normalize_histogram, 
                             summarize, correct, accuracy_per_class, accuracy, \
                             summarize_weights_and_grads, tensor_stats_str
 from exp.seqbert import TOKENS_BP_IDX
-from exp.seqbert.model import SeqBERT, SeqBERTLightningModule, \
+from exp.seqbert.model import SeqBERT, SeqBERTLightningModule, Count, \
                             CheckpointEveryNSteps, bool_to_tokens, main
 
 
@@ -111,15 +111,35 @@ class Pretrain(SeqBERTLightningModule):
         self.prev_loss = 10000.
 
         # get sequence of length 2*seq_len from dataloader
+        self.sample_freq = int(self.hparams.seq_len * self.hparams.seq_len_sample_freq)
         self.load_seq_len = int(self.hparams.seq_len_source_multiplier * self.hparams.seq_len)
         min_crop = int(self.hparams.seq_len * self.hparams.crop_factor)
         max_crop = self.hparams.seq_len - min_crop
         offset_min = 1 + min_crop
         offset_max = self.hparams.seq_len - min_crop
-        self.batch_processor = PretrainBatchProcessor(self.hparams.seq_len,
+
+        self.train_batch_processor = PretrainBatchProcessor(self.hparams.seq_len,
                 min_crop, max_crop, offset_min, offset_max,
                 self.hparams.mask_prop, self.hparams.random_prop, self.hparams.keep_prop)
-        self.sample_freq = int(self.hparams.seq_len * self.hparams.seq_len_sample_freq)
+        if self.hparams.val_mask_prop is None:
+            self.hparams.val_mask_prop = self.hparams.mask_prop
+        if self.hparams.val_random_prop is None:
+            self.hparams.val_random_prop = self.hparams.random_prop
+        if self.hparams.val_keep_prop is None:
+            self.hparams.val_keep_prop = self.hparams.keep_prop
+        self.val_batch_processor = PretrainBatchProcessor(self.hparams.seq_len,
+                min_crop, max_crop, offset_min, offset_max, self.hparams.val_mask_prop,
+                self.hparams.val_random_prop, self.hparams.val_keep_prop)
+
+        self.count_metric, self.acc_metric, self.pre_metric, self.rec_metric = {}, {}, {}, {}
+        for name in ['cls', 'A', 'G', 'C', 'T']:
+            self.count_metric[name] = Count()
+            self.acc_metric[name] = pl.metrics.classification.Accuracy()
+            self.pre_metric[name] = pl.metrics.classification.Precision()
+            self.rec_metric[name] = pl.metrics.classification.Recall()
+        for name in ['mask', 'rand', 'keep']:
+            self.count_metric[name] = Count()
+            self.acc_metric[name] = pl.metrics.classification.Accuracy()
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.model.parameters(), lr=self.hparams.learning_rate)
@@ -131,7 +151,7 @@ class Pretrain(SeqBERTLightningModule):
                                 repeat_len=self.hparams.DEBUG_random_repeat_len)
             return torch.utils.data.DataLoader(train_data, batch_size=self.hparams.batch_size,
                                 shuffle=True, num_workers=self.hparams.num_workers,
-                                collate_fn=self.batch_processor.collate)
+                                collate_fn=self.train_batch_processor.collate)
         else:
             intervals = None
             if self.hparams.train_intervals is not None:
@@ -141,7 +161,7 @@ class Pretrain(SeqBERTLightningModule):
                         seq_transform=bioseq_to_index, sequential=False,
                         sample_freq=self.sample_freq)
         return train_data.get_data_loader(self.hparams.batch_size, self.hparams.num_workers,
-                        collate_fn=self.batch_processor.collate)
+                        collate_fn=self.train_batch_processor.collate)
 
     def val_dataloader(self):
         if self.hparams.DEBUG_use_random_data:
@@ -150,7 +170,7 @@ class Pretrain(SeqBERTLightningModule):
                                 repeat_len=self.hparams.DEBUG_random_repeat_len)
             return torch.utils.data.DataLoader(valid_data, batch_size=self.hparams.batch_size,
                                 shuffle=False, num_workers=self.hparams.num_workers,
-                                collate_fn=self.batch_processor.collate)
+                                collate_fn=self.val_batch_processor.collate)
         else:
             intervals = None
             if self.hparams.valid_intervals is not None:
@@ -160,7 +180,7 @@ class Pretrain(SeqBERTLightningModule):
                         seq_transform=bioseq_to_index, sequential=True,
                         sample_freq=self.sample_freq)
         return valid_data.get_data_loader(self.hparams.batch_size, self.hparams.num_workers,
-                        collate_fn=self.batch_processor.collate)
+                        collate_fn=self.val_batch_processor.collate)
 
     def masked_forward(self, batch):
         source, target, mask = batch
@@ -172,21 +192,82 @@ class Pretrain(SeqBERTLightningModule):
         loss = masked_predict_loss + self.hparams.cls_regularization * cls_loss
         return loss, masked_predict_loss, cls_loss, predicted, latent, source, target, mask, embedded
 
+    def accuracy_report(self, predicted, source, target, mask, compute=True, is_val=False):
+        with torch.no_grad():
+            self.log_stats('cls', predicted, target, (source == TOKENS_BP_IDX['~']),
+                            prog_bar=True, compute=compute,
+                            is_val=is_val, pos_idx=TOKENS_BP_IDX['t'])
+            # only report accuracy for mask, rand, keep positions (positive sample is not defined)
+            self.log_stats('mask', predicted, target, (mask == self.MASK_INDEX),
+                            prog_bar=True, compute=compute, is_val=is_val)
+            self.log_stats('rand', predicted, target, (mask == self.RANDOM_INDEX),
+                            prog_bar=True, compute=compute, is_val=is_val)
+            self.log_stats('keep', predicted, target, (mask == self.KEEP_INDEX),
+                            prog_bar=True, compute=compute, is_val=is_val)
+            if predicted is None:  # dummy variables so that logical_and works
+                target = torch.zeros([1])
+                loss_pos = torch.zeros([1])
+            else:
+                loss_pos = (mask != self.NO_LOSS_INDEX)
+            self.log_stats('A', predicted, target,
+                            torch.logical_and(target == TOKENS_BP_IDX['A'], loss_pos),
+                            compute=compute, is_val=is_val, pos_idx=TOKENS_BP_IDX['A'])
+            self.log_stats('G', predicted, target,
+                            torch.logical_and(target == TOKENS_BP_IDX['G'], loss_pos),
+                            compute=compute, is_val=is_val, pos_idx=TOKENS_BP_IDX['G'])
+            self.log_stats('C', predicted, target,
+                            torch.logical_and(target == TOKENS_BP_IDX['C'], loss_pos),
+                            compute=compute, is_val=is_val, pos_idx=TOKENS_BP_IDX['C'])
+            self.log_stats('T', predicted, target,
+                            torch.logical_and(target == TOKENS_BP_IDX['T'], loss_pos),
+                            compute=compute, is_val=is_val, pos_idx=TOKENS_BP_IDX['T'])
+
+    def log_stats(self, name, predicted, target, mask,
+                prog_bar=False, compute=True, is_val=False, pos_idx=None):
+        if predicted is not None:
+            pred = mask_select(predicted, mask)
+            tgt = mask_select(target, mask)
+            size = tgt.size(0)
+            self.count_metric[name].update(size)
+            if pred.nelement() > 0:
+                self.acc_metric[name].update(pred, tgt)
+                if pos_idx is not None:  # only log precision/recall if positive samples are defined
+                    self.pre_metric[name].update(torch.argmax(pred, dim=1) == pos_idx, tgt == pos_idx)
+                    self.rec_metric[name].update(torch.argmax(pred, dim=1) == pos_idx, tgt == pos_idx)
+        if compute:
+            count = self.count_metric[name].compute()
+            accuracy = self.acc_metric[name].compute()
+            precision, recall = torch.tensor([0]), torch.tensor([0])  # dummy values
+            if pos_idx is not None:
+                precision = self.pre_metric[name].compute()
+                recall = self.rec_metric[name].compute()
+            if is_val:
+                name = 'val_' + name
+                prog_bar = False
+                if pos_idx is not None:
+                    print('    {:10.10s} n: {:5.0f}  acc: {:1.2f}  pre: {:1.2f}  rec: {:1.2f}'.format(
+                            name, count.item(), accuracy.item(), precision.item(), recall.item()))
+                else:
+                    print('    {:10.10s} n: {:5.0f}  acc: {:1.2f}'.format(
+                            name, count.item(), accuracy.item()))
+            self.log(name + '_n', count, prog_bar=False)
+            self.log(name + '_a', accuracy, prog_bar=prog_bar)
+            if pos_idx is not None:
+                self.log(name + '_p', precision, prog_bar=False)
+                self.log(name + '_r', recall, prog_bar=False)
+
     def training_step(self, x, batch_idx):
         batch, (seqname, coord) = x
         loss, pred_loss, cls_loss, predicted, latent, source, target, mask, embedded = self.masked_forward(batch)
-        # if batch_idx > 1000 and loss > 2.2:
-        #     print(loss, self.prev_loss)
-        #     self.print_progress(loss, predicted, latent, source, target, mask, embedded, seqname, coord, include_grad=True)
-        #     raise Exception("loss delta exceeded")
         self.prev_loss = loss.item()
         if batch_idx % self.hparams.print_progress_freq == 0:
-            self.print_progress(loss, predicted, latent, source, target, mask, embedded, seqname, coord, include_grad=True)
-        self.log('mask_loss', pred_loss.item(), prog_bar=True)
-        self.log('class_loss', cls_loss.item(), prog_bar=True)
+            self.print_progress(loss, predicted, latent, source, target, mask, embedded, seqname, coord)
+        self.log('m_loss', pred_loss.item(), prog_bar=True)
+        self.log('c_loss', cls_loss.item(), prog_bar=True)
+        self.accuracy_report(predicted, source, target, mask)
         return loss
 
-    def print_progress(self, loss, predicted, latent, source, target, mask, embedded, seqname, coord, include_grad=False):
+    def print_progress(self, loss, predicted, latent, source, target, mask, embedded, seqname, coord):
         str_train_sample = summarize(
             mask + len(self.model.tokens),
             source,
@@ -195,11 +276,6 @@ class Pretrain(SeqBERTLightningModule):
             predicted.permute(1, 0, 2),
             index_symbols=self.model.tokens + [' ', '_', '?', '='])  # extra symbols represent masking
 
-        # if include_grad:
-        #     loss.backward(retain_graph=True)
-        #     self.optimizers().step()
-        # print(summarize_weights_and_grads({'embedding': self.embedding, 'transformer': self.transformer_encoder,
-        #         'decoder': self.decoder}, include_grad=False, threshold_trigger=0.))
         hist = prediction_histograms(predicted.detach().cpu(), target.detach().cpu(), n_bins=5)
         acc = normalize_histogram(hist)
         acc_numbers = accuracy_per_class(hist, threshold_prob=1. / len(self.model.tokens))
@@ -214,7 +290,7 @@ class Pretrain(SeqBERTLightningModule):
         latent_reshape = latent.reshape(-1, latent.shape[2])
         embedded_pairwise_dist = F.pairwise_distance(embed_reshape[:, :-1], embed_reshape[:, 1:])
         latent_pairwise_dist = F.pairwise_distance(latent_reshape[:, :-1], latent_reshape[:, 1:])
-        print('embedding/latent', tensor_stats_str(
+        print('embedding/latent len/pairwise dist', tensor_stats_str(
             embedded_vector_lengths, embedded_pairwise_dist, latent_vector_lengths, latent_pairwise_dist))
 
     def validation_step(self, batch, batch_idx):
@@ -222,13 +298,14 @@ class Pretrain(SeqBERTLightningModule):
         loss, pred_loss, cls_loss, predicted, latent, source, target, mask, embedded = self.masked_forward(x)
         if batch_idx % self.hparams.print_progress_freq == 0:
             self.print_progress(loss, predicted, latent, source, target, mask, embedded, seqname, coord)
-        self.log('val_mask_loss', pred_loss.item(), prog_bar=True)
-        self.log('val_class_loss', cls_loss.item(), prog_bar=True)
+        self.log('val_m_loss', pred_loss.item())
+        self.log('val_c_loss', cls_loss.item())
+        self.accuracy_report(predicted, source, target, mask, compute=False, is_val=True)
         return loss
 
-    # def validation_epoch_end(self, val_step_outputs):
-    #     result = pl.EvalResult(checkpoint_on=loss)
-    #     result.log('val_loss', loss)
+    def validation_epoch_end(self, val_step_outputs):
+        print('\nValidation complete\n')
+        self.accuracy_report(None, None, None, None, compute=True, is_val=True)
 
     @staticmethod
     def add_model_specific_args(parent_parser):  # pragma: no-cover
@@ -243,6 +320,9 @@ class Pretrain(SeqBERTLightningModule):
         parser.add_argument('--keep_prop', default=0.05, type=float)
         parser.add_argument('--mask_prop', default=0.08, type=float)
         parser.add_argument('--random_prop', default=0.02, type=float)
+        parser.add_argument('--val_keep_prop', default=None, type=float)  # use training props if None
+        parser.add_argument('--val_mask_prop', default=None, type=float)
+        parser.add_argument('--val_random_prop', default=None, type=float)
         # data params
         parser.add_argument('--seq_file', default='data/ref_genome/p12/assembled_chr/GRCh38_p12_assembled_chr.fa', type=str)
         parser.add_argument('--train_intervals', default=None, type=str)

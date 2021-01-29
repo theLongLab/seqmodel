@@ -8,8 +8,9 @@ import pytorch_lightning as pl
 from pytorch_lightning.core.lightning import LightningModule
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import GPUStatsMonitor
+from pytorch_lightning.utilities.parsing import lightning_getattr, lightning_setattr
 
-
+from seqmodel.functional.log import summarize_weights_and_grads
 from seqmodel.model.conv import SeqFeedForward
 from seqmodel.model.attention import SinusoidalPosition
 from exp.seqbert import TOKENS_BP
@@ -40,9 +41,10 @@ class SeqBERT(nn.Module):
                     hparams['feedforward_dims'], hparams['dropout']),
                 hparams['n_layers'])
 
+        self.n_class = n_class
         if n_class is None or n_class <= 0:
-            n_class = len(self.tokens)  # number of classes to decode to
-        self.decoder = SeqFeedForward(hparams['n_dims'], n_class,
+            self.n_class = len(self.tokens)  # number of classes to decode to
+        self.decoder = SeqFeedForward(hparams['n_dims'], self.n_class,
                         hidden_layers=hparams['n_decode_layers'] - 1, activation_fn=nn.ReLU)
         self.classify_only = classify_only  # whether to decode all positions or only first one
 
@@ -121,6 +123,9 @@ class SeqBERTLightningModule(LightningModule):
         parser.add_argument('--load_checkpoint_path', default=None, type=str)
         parser.add_argument('--load_pretrained_model', default=None, type=str)
         parser.add_argument('--test_out_file', default='./test-scores.pt', type=str)
+        parser.add_argument('--kill_param_threshold', default=10000., type=float)
+        parser.add_argument('--kill_grad_threshold', default=10000., type=float)
+        parser.add_argument('--dump_file', default='./model-dump.pt', type=str)
         return parser
 
 
@@ -185,13 +190,40 @@ class BinaryPredictTensorMetric(pl.metrics.Metric):
         return self.score
 
 
-class PrintGradients(pl.Callback):
-    def __init__(self):
-        print('zero grad callback loaded')
+"""
+Note: do not run on multi-GPU (no reduce function defined)
+"""
+class Count(pl.metrics.Metric):
 
-    def on_before_zero_grad(self, *args, **kwargs):
-        print('zero grad callback')
-        print(args, kwargs)
+    def __init__(self, dim=0):
+        super().__init__(dist_sync_on_step=False)
+        self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
+
+    def update(self, num: torch.Tensor):
+        self.total += num
+
+    def compute(self):
+        return self.total
+
+
+class ParamThreshold(pl.Callback):
+    def __init__(self, threshold, grad_threshold, dump_file):
+        self.threshold = threshold
+        self.grad_threshold = grad_threshold
+        self.dump_file = dump_file
+        self.threshold_exceeded = False
+
+    def on_after_backward(self, *args, **kwargs):
+        pl_module = args[1]
+        params = summarize_weights_and_grads(pl_module.model,
+                            include_grad=True, threshold=self.threshold,
+                            grad_threshold=self.grad_threshold)
+        if params is not None:
+            self.threshold_exceeded = True
+            print('Threshold {}, grad threshold {} exceeded for params:'.format(
+                        self.threshold, self.grad_threshold))
+            print(params)
+            raise Exception('Parameter value or gradient threshold exceeded.')
 
 
 def main(ModuleClass):
@@ -205,21 +237,34 @@ def main(ModuleClass):
     # defaults
     print(vars(args))
     if args.load_checkpoint_path is not None:
-        model = ModuleClass.load_from_checkpoint(args.load_checkpoint_path, **vars(args))
+        pl_module = ModuleClass.load_from_checkpoint(args.load_checkpoint_path, **vars(args))
     elif args.load_pretrained_model is not None:
-        model = ModuleClass(**vars(args))
+        pl_module = ModuleClass(**vars(args))
         pretrained = ModuleClass.load_from_checkpoint(args.load_pretrained_model)
-        pretrained.load_pretrained_encoder( model)
+        pl_module.load_pretrained_encoder(pretrained)
     else:
-        model = ModuleClass(**vars(args))
+        pl_module = ModuleClass(**vars(args))
     args.callbacks = [
         CheckpointEveryNSteps(args.save_checkpoint_freq),
-        # PrintGradients(),
+        ParamThreshold(args.kill_param_threshold, args.kill_grad_threshold, args.dump_file),
         ]
     if args.gpus > 0:
         args.callbacks.append(GPUStatsMonitor())
     trainer = Trainer.from_argparse_args(args)
-    if args.mode == 'train':
-        trainer.fit(model)
-    elif args.mode == 'test':
-        trainer.test(model)
+    if args.auto_lr_find or args.auto_scale_batch_size is not None:
+        trainer.tune(pl_module)
+    # make sure batch_size is divisible by 2
+    batch_size = lightning_getattr(pl_module, 'batch_size')
+    if batch_size % 2 == 1:
+        print('Making batch size {} divisible by 2'.format(batch_size))
+        lightning_setattr(pl_module, 'batch_size', batch_size - 1)
+    try:
+        if args.mode == 'train':
+            trainer.fit(pl_module)
+        elif args.mode == 'test':
+            trainer.test(pl_module)
+    except:
+        if args.dump_file != '':
+            print('Unexpected error, dumping model state to {}'.format(args.dump_file))
+            torch.save(pl_module.model, args.dump_file)
+        raise

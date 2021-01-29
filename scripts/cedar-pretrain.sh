@@ -40,18 +40,18 @@ tar xzf $DATA_DIR/*.tar.gz -C $RUN_DIR
 # hparams
 python ./src/exp/seqbert/pretrain.py \
     --n_dims=512 \
-    --n_heads=4 \
-    --n_layers=4 \
+    --n_heads=8 \
+    --n_layers=8 \
     --n_decode_layers=2 \
     --feedforward_dims=1024 \
     --position_embedding=Sinusoidal \
-    --batch_size=40 \
+    --batch_size=16 \
     --learning_rate=3e-4 \
-    --seq_len=2000 \
+    --seq_len=1000 \
     --dropout=0. \
     --keep_prop=0.01 \
-    --mask_prop=0.07 \
-    --random_prop=0.02 \
+    --mask_prop=0.08 \
+    --random_prop=0.01 \
     --cls_regularization=0.01 \
     --seq_len_source_multiplier=2. \
     --crop_factor=0.2 \
@@ -59,10 +59,18 @@ python ./src/exp/seqbert/pretrain.py \
     --num_workers=8 \
     --print_progress_freq=500 \
     --save_checkpoint_freq=5000 \
+    --val_check_interval=5000 \
+    --limit_val_batches=1000 \
     --seq_file=$RUN_DIR/data/ref_genome/p12/assembled_chr/GRCh38_p12_assembled_chr.fa \
     --train_intervals=$RUN_DIR/data/ref_genome/grch38-train.bed \
     --valid_intervals=$RUN_DIR/data/ref_genome/grch38-1M-valid.bed \
     --default_root_dir=$OUT_DIR \
+    --gradient_clip_val=0.5 \
+    --auto_lr_find=True \
+    --auto_scale_batch_size='binsearch' \
+    --kill_param_threshold=10000. \
+    --kill_grad_threshold=10000. \
+    --dump_file=$OUT_DIR/model-dump.pt \
 
     # --load_checkpoint_path=$OUT_DIR/lightning_logs/version_55300997/checkpoints/N-Step-Checkpoint_0_170000.ckpt \
     # --accumulate_grad_batches=1 \
