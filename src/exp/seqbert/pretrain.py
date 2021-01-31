@@ -95,6 +95,38 @@ class PretrainBatchProcessor():
         return (source, target, mask), (key, torch.tensor(coord))  # send this to GPU
 
 
+def seqname_to_n(seqname):  # temp hack for logging
+    seqnames_dict = {
+        'chr1': 1,
+        'chr2': 2,
+        'chr3': 3,
+        'chr4': 4,
+        'chr5': 5,
+        'chr6': 6,
+        'chr7': 7,
+        'chr8': 8,
+        'chr9': 9,
+        'chr10': 10,
+        'chr11': 11,
+        'chr12': 12,
+        'chr13': 13,
+        'chr14': 14,
+        'chr15': 15,
+        'chr16': 16,
+        'chr17': 17,
+        'chr18': 18,
+        'chr19': 19,
+        'chr20': 20,
+        'chr21': 21,
+        'chr22': 22,
+        'chrX': 23,
+        'chrY': 24,
+    }
+    if seqname in seqnames_dict:
+        return seqnames_dict[seqname]
+    return 0
+
+
 class Pretrain(SeqBERTLightningModule):
 
     # for mask
@@ -209,31 +241,30 @@ class Pretrain(SeqBERTLightningModule):
                 loss_pos = torch.zeros([1])
             else:
                 loss_pos = (mask != self.NO_LOSS_INDEX)
-            self.log_stats('A', predicted, target,
-                            torch.logical_and(target == TOKENS_BP_IDX['A'], loss_pos),
-                            compute=compute, is_val=is_val, pos_idx=TOKENS_BP_IDX['A'])
-            self.log_stats('G', predicted, target,
-                            torch.logical_and(target == TOKENS_BP_IDX['G'], loss_pos),
-                            compute=compute, is_val=is_val, pos_idx=TOKENS_BP_IDX['G'])
-            self.log_stats('C', predicted, target,
-                            torch.logical_and(target == TOKENS_BP_IDX['C'], loss_pos),
-                            compute=compute, is_val=is_val, pos_idx=TOKENS_BP_IDX['C'])
-            self.log_stats('T', predicted, target,
-                            torch.logical_and(target == TOKENS_BP_IDX['T'], loss_pos),
-                            compute=compute, is_val=is_val, pos_idx=TOKENS_BP_IDX['T'])
+            self.log_stats('A', predicted, target, loss_pos, compute=compute,
+                            is_val=is_val, pos_idx=TOKENS_BP_IDX['A'])
+            self.log_stats('G', predicted, target, loss_pos, compute=compute,
+                            is_val=is_val, pos_idx=TOKENS_BP_IDX['G'])
+            self.log_stats('C', predicted, target, loss_pos, compute=compute,
+                            is_val=is_val, pos_idx=TOKENS_BP_IDX['C'])
+            self.log_stats('T', predicted, target, loss_pos, compute=compute,
+                            is_val=is_val, pos_idx=TOKENS_BP_IDX['T'])
 
     def log_stats(self, name, predicted, target, mask,
                 prog_bar=False, compute=True, is_val=False, pos_idx=None):
         if predicted is not None:
-            pred = mask_select(predicted, mask)
-            tgt = mask_select(target, mask)
-            size = tgt.size(0)
-            self.count_metric[name].update(size)
+            pred = mask_select(predicted, mask).detach().cpu()
+            tgt = mask_select(target, mask).detach().cpu()
+            count = tgt.size(0)
             if pred.nelement() > 0:
-                self.acc_metric[name].update(pred, tgt)
                 if pos_idx is not None:  # only log precision/recall if positive samples are defined
-                    self.pre_metric[name].update(torch.argmax(pred, dim=1) == pos_idx, tgt == pos_idx)
-                    self.rec_metric[name].update(torch.argmax(pred, dim=1) == pos_idx, tgt == pos_idx)
+                    pred = (torch.argmax(pred, dim=1) == pos_idx)
+                    tgt = (tgt == pos_idx)
+                    self.pre_metric[name].update(pred, tgt)
+                    self.rec_metric[name].update(pred, tgt)
+                    count = torch.sum(tgt)  # count only positives
+                self.acc_metric[name].update(pred, tgt)
+            self.count_metric[name].update(count)
         if compute:
             count = self.count_metric[name].compute()
             accuracy = self.acc_metric[name].compute()
@@ -265,6 +296,9 @@ class Pretrain(SeqBERTLightningModule):
         self.log('m_loss', pred_loss.item(), prog_bar=True)
         self.log('c_loss', cls_loss.item(), prog_bar=True)
         self.accuracy_report(predicted, source, target, mask)
+        for name, coord in zip(seqname, coord):
+            self.log('chr', seqname_to_n(name))
+            self.log('coord', coord)
         return loss
 
     def print_progress(self, loss, predicted, latent, source, target, mask, embedded, seqname, coord):
@@ -301,6 +335,9 @@ class Pretrain(SeqBERTLightningModule):
         self.log('val_m_loss', pred_loss.item())
         self.log('val_c_loss', cls_loss.item())
         self.accuracy_report(predicted, source, target, mask, compute=False, is_val=True)
+        for name, coord in zip(seqname, coord):
+            self.log('val_chr', seqname_to_n(name), prog_bar=True)
+            self.log('val_coord', coord, prog_bar=True)
         return loss
 
     def validation_epoch_end(self, val_step_outputs):
