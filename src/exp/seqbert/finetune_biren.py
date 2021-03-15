@@ -44,8 +44,8 @@ class LabelRadomizer():
 class FineTuneBiRen(SeqBERTLightningModule):
 
     def __init__(self, **hparams):
-        model = SeqBERT(classify_only=True, n_class=1, **hparams)
-        super().__init__(model, **hparams)
+        super().__init__(**hparams)
+        self.model = SeqBERT(classify_only=True, n_class=1, **hparams)
         self.loss_fn = nn.BCEWithLogitsLoss()
         self.hparams.sample_freq = int(self.hparams.seq_len * self.hparams.seq_len_sample_freq)
         self.hparams.min_len = int(self.hparams.seq_len * self.hparams.crop_factor)
@@ -160,4 +160,4 @@ class FineTuneBiRen(SeqBERTLightningModule):
 
 
 if __name__ == '__main__':
-    main(FineTuneBiRen)
+    main(FineTuneBiRen, Pretrain)

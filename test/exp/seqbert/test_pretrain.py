@@ -108,7 +108,18 @@ class Test_Pretrain(unittest.TestCase):
                 elif target[i, j] == TOKENS_BP_IDX['n']:
                     self.assertEqual(source[i, j], TOKENS_BP_IDX['n'])
 
-        dataloader = self.dataset.get_data_loader(4, 2, collate_fn=batch_processor.collate)
+    def test_BatchProcessorMemoryError(self):
+        batch_processor = PretrainBatchProcessor(1000,
+                200, 800, 201, 800,
+                0.1, 0.03, 0.02)
+        fasta = FastaFile('data/ref_genome/p12/assembled_chr/GRCh38_p12_assembled_chr.fa')
+        seq = fasta.fasta['chr10'][75846397:75846397 + 2000]
+        print(batch_processor.collate([(bioseq_to_index(seq), ('chr10', 75846397))]))
+        # train_data = StridedSequence(fasta,
+        #                 2000, seq_transform=bioseq_to_index, sequential=True, sample_freq=self.sample_freq)
+        # train_data.start_offset = 
+        # data_loader = train_data.get_data_loader(16, 8,
+        #                 collate_fn=batch_processor.collate)
 
 
 if __name__ == '__main__':

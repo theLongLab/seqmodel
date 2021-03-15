@@ -40,8 +40,8 @@ class MatFileDataset(IterableDataset):
 class FineTuneDeepSEA(SeqBERTLightningModule):
 
     def __init__(self, **hparams):
-        model = SeqBERT(classify_only=True, n_class=919, **hparams)
-        super().__init__(model, **hparams)
+        super().__init__(**hparams)
+        self.model = SeqBERT(classify_only=True, n_class=919, **hparams)
         self.loss_fn = nn.BCEWithLogitsLoss()
 
         self.train_acc = pl.metrics.Accuracy(threshold=0)
@@ -51,10 +51,6 @@ class FineTuneDeepSEA(SeqBERTLightningModule):
         self.val_pr_curve = pl.metrics.PrecisionRecallCurve(compute_on_step=False, pos_label=1)
         self.val_roc_curve = pl.metrics.classification.ROC(compute_on_step=False, pos_label=1)
         self.test_results = BinaryPredictTensorMetric()
-
-    def load_pretrained_model(self, seqbert_obj):
-        self.model.embedding = seqbert_obj.embedding
-        self.model.transformer_encoder = seqbert_obj.transformer_encoder
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.model.parameters(), lr=self.hparams.learning_rate)
@@ -129,4 +125,4 @@ class FineTuneDeepSEA(SeqBERTLightningModule):
 
 
 if __name__ == '__main__':
-    main(FineTuneDeepSEA)
+    main(FineTuneDeepSEA, Pretrain)

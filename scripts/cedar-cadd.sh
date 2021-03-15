@@ -5,8 +5,8 @@
 #SBATCH --cpus-per-task=4               # number of cores
 #SBATCH --gres=gpu:p100:1               # type and number of GPU(s) per node
 #SBATCH --mem=16000                     # max memory (default unit is MB) per node
-#SBATCH --output=seqbert-cadd-%j.out  # file name for the output
-#SBATCH --error=seqbert-cadd-%j.err   # file name for errors
+#SBATCH --output=%j-cadd.out  # file name for the output
+#SBATCH --error=%j-cadd.err   # file name for errors
                                         # %j gets replaced by the job number
 
 ## project name

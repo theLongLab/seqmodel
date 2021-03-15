@@ -87,18 +87,27 @@ class VariantDecoder(SeqBERT):
 
 class SeqBERTLightningModule(LightningModule):
 
-    def __init__(self, model, **hparams):
+    def __init__(self, **hparams):
         super().__init__()
         self.save_hyperparameters()
-        self.model = model
         self.prev_loss = 10000.
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.model.parameters(), lr=self.hparams.learning_rate)
 
-    def load_pretrained_encoder(self, source_model):
-        self.model.embedding = source_model.embedding
-        self.model.transformer_encoder = source_model.transformer_encoder
+    def load_pretrained_encoder(self, source_module):
+        self.model.embedding = source_module.model.embedding
+        self.model.transformer_encoder = source_module.model.transformer_encoder
+
+    def log_chr_coord(self, seqnames, coords, is_val=False):
+        if is_val:
+            for name, coord in zip(seqnames, coords):
+                self.log('val_chr', seqname_to_n(name))
+                self.log('val_coord', coord)
+        else:
+            for name, coord in zip(seqnames, coords):
+                self.log('chr', seqname_to_n(name))
+                self.log('coord', coord)
 
     @staticmethod
     def add_model_specific_args(parent_parser):  # pragma: no-cover
@@ -193,7 +202,7 @@ class BinaryPredictTensorMetric(pl.metrics.Metric):
 """
 Note: do not run on multi-GPU (no reduce function defined)
 """
-class Count(pl.metrics.Metric):
+class Counter(pl.metrics.Metric):
 
     def __init__(self, dim=0):
         super().__init__(dist_sync_on_step=False)
@@ -226,7 +235,39 @@ class ParamThreshold(pl.Callback):
             raise Exception('Parameter value or gradient threshold exceeded.')
 
 
-def main(ModuleClass):
+def seqname_to_n(seqname):  # temp hack for logging human chr as int
+    seqnames_dict = {
+        'chr1': 1,
+        'chr2': 2,
+        'chr3': 3,
+        'chr4': 4,
+        'chr5': 5,
+        'chr6': 6,
+        'chr7': 7,
+        'chr8': 8,
+        'chr9': 9,
+        'chr10': 10,
+        'chr11': 11,
+        'chr12': 12,
+        'chr13': 13,
+        'chr14': 14,
+        'chr15': 15,
+        'chr16': 16,
+        'chr17': 17,
+        'chr18': 18,
+        'chr19': 19,
+        'chr20': 20,
+        'chr21': 21,
+        'chr22': 22,
+        'chrX': 23,
+        'chrY': 24,
+    }
+    if seqname in seqnames_dict:
+        return seqnames_dict[seqname]
+    return 0
+
+
+def main(ModuleClass, PretrainClass):
     parent_parser = ArgumentParser(add_help=False)
     parser = ModuleClass.add_model_specific_args(parent_parser)
     parser = Trainer.add_argparse_args(parser)
@@ -240,7 +281,7 @@ def main(ModuleClass):
         pl_module = ModuleClass.load_from_checkpoint(args.load_checkpoint_path, **vars(args))
     elif args.load_pretrained_model is not None:
         pl_module = ModuleClass(**vars(args))
-        pretrained = ModuleClass.load_from_checkpoint(args.load_pretrained_model)
+        pretrained = PretrainClass.load_from_checkpoint(args.load_pretrained_model)
         pl_module.load_pretrained_encoder(pretrained)
     else:
         pl_module = ModuleClass(**vars(args))

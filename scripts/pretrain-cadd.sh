@@ -17,12 +17,12 @@ python src/exp/seqbert/pretrain_cadd.py \
     --train_intervals=data/vcf/chr22-1000-seq-10-variants.bed \
     --valid_intervals=data/vcf/chr22-1000-seq-10-variants.bed \
     --default_root_dir=outputs \
-    --print_progress_freq=1 \
-    --save_checkpoint_freq=1000 \
+    --print_progress_freq=10 \
+    --save_checkpoint_freq=100 \
+    --val_check_interval=10 \
+    --limit_val_batches=10 \
     --gpus=0 \
     # --DEBUG_use_random_data=True \
-    # --DEBUG_random_repeat_len=2 \
-    # --DEBUG_random_n_repeats=100 \
 
     # --accumulate_grad_batches=1 \
     # --load_checkpoint_path=$OUT_DIR/lightning_logs/version_53753746/checkpoints/N-Step-Checkpoint_0_85000.ckpt \

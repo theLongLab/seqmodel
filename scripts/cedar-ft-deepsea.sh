@@ -32,15 +32,13 @@ source $SLURM_TMPDIR/env/bin/activate
 pip install --no-index --upgrade pip
 pip install --no-index -r ./requirements.txt
 ## these dependencies need to be downloaded
-pip install pyfaidx pytorch-lightning
+pip install pyfaidx pytorch-lightning==1.1.6
 
 ## extract all .tar.gz data files
-tar xzf $DATA_DIR/*.tar.gz -C $RUN_DIR
+tar xzvf $DATA_DIR/*.tar.gz -C $RUN_DIR
 
 # hparams
 python ./src/exp/seqbert/finetune_deepsea.py \
-    --mode='test' \
-    --limit_test_batches=1000 \
     --n_dims=512 \
     --n_heads=4 \
     --n_layers=4 \
@@ -55,10 +53,15 @@ python ./src/exp/seqbert/finetune_deepsea.py \
     --accumulate_grad_batches=1 \
     --print_progress_freq=500 \
     --save_checkpoint_freq=5000 \
+    --val_check_interval=5000 \
+    --limit_val_batches=1000 \
     --train_mat=$RUN_DIR/data/deepsea/train.mat \
     --valid_mat=$RUN_DIR/data/deepsea/valid.mat \
     --test_mat=$RUN_DIR/data/deepsea/test.mat \
-    --load_checkpoint_path=../lightning_logs/version_56082675/checkpoints/N-Step-Checkpoint_0_70000.ckpt \
+
+    # --load_checkpoint_path=../lightning_logs/version_56082675/checkpoints/N-Step-Checkpoint_0_70000.ckpt \
+    # --mode='test' \
+    # --limit_test_batches=1000 \
 
 #    --load_pretrained_model=../lightning_logs/version_55349874/checkpoints/fixed-N-Step-Checkpoint_0_260000.ckpt \
     # --accumulate_grad_batches=1 \

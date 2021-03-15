@@ -32,10 +32,10 @@ source $SLURM_TMPDIR/env/bin/activate
 pip install --no-index --upgrade pip
 pip install --no-index -r ./requirements.txt
 ## these dependencies need to be downloaded
-pip install pyfaidx pytorch-lightning
+pip install pyfaidx pytorch-lightning==1.1.6
 
 ## extract all .tar.gz data files
-tar xzf $DATA_DIR/*.tar.gz -C $RUN_DIR
+tar xzvf $DATA_DIR/*.tar.gz -C $RUN_DIR
 
 # hparams
 python ./src/exp/seqbert/finetune_biren.py \

@@ -18,7 +18,7 @@ from seqmodel.functional.log import prediction_histograms, normalize_histogram, 
                             summarize, correct, accuracy_per_class, accuracy, \
                             summarize_weights_and_grads, tensor_stats_str
 from exp.seqbert import TOKENS_BP_IDX
-from exp.seqbert.model import SeqBERT, SeqBERTLightningModule, Count, \
+from exp.seqbert.model import SeqBERT, SeqBERTLightningModule, Counter, \
                             CheckpointEveryNSteps, bool_to_tokens, main
 
 
@@ -85,6 +85,7 @@ class PretrainBatchProcessor():
 
     def collate(self, samples):
         sequences, metadata = zip(*samples)  # make each datatype a separate list
+        print(sequences, metadata)
         key, coord = zip(*metadata)
         # shuffle for next sequence prediction task
         cls_targets, split_seqs = self.split_shuffle(torch.stack(sequences, dim=0))
@@ -93,38 +94,6 @@ class PretrainBatchProcessor():
         # mask for masked token prediction task
         source, mask = self.mask_transform(target)
         return (source, target, mask), (key, torch.tensor(coord))  # send this to GPU
-
-
-def seqname_to_n(seqname):  # temp hack for logging
-    seqnames_dict = {
-        'chr1': 1,
-        'chr2': 2,
-        'chr3': 3,
-        'chr4': 4,
-        'chr5': 5,
-        'chr6': 6,
-        'chr7': 7,
-        'chr8': 8,
-        'chr9': 9,
-        'chr10': 10,
-        'chr11': 11,
-        'chr12': 12,
-        'chr13': 13,
-        'chr14': 14,
-        'chr15': 15,
-        'chr16': 16,
-        'chr17': 17,
-        'chr18': 18,
-        'chr19': 19,
-        'chr20': 20,
-        'chr21': 21,
-        'chr22': 22,
-        'chrX': 23,
-        'chrY': 24,
-    }
-    if seqname in seqnames_dict:
-        return seqnames_dict[seqname]
-    return 0
 
 
 class Pretrain(SeqBERTLightningModule):
@@ -136,8 +105,8 @@ class Pretrain(SeqBERTLightningModule):
     KEEP_INDEX = 3
 
     def __init__(self, **hparams):
-        model = SeqBERT(**hparams)
-        super().__init__(model, **hparams)
+        super().__init__(**hparams)
+        self.model = SeqBERT(**hparams)
         self.loss_fn = nn.CrossEntropyLoss()
         self.cls_loss_fn = nn.CrossEntropyLoss()
         self.prev_loss = 10000.
@@ -165,12 +134,12 @@ class Pretrain(SeqBERTLightningModule):
 
         self.count_metric, self.acc_metric, self.pre_metric, self.rec_metric = {}, {}, {}, {}
         for name in ['cls', 'A', 'G', 'C', 'T']:
-            self.count_metric[name] = Count()
+            self.count_metric[name] = Counter()
             self.acc_metric[name] = pl.metrics.classification.Accuracy()
             self.pre_metric[name] = pl.metrics.classification.Precision()
             self.rec_metric[name] = pl.metrics.classification.Recall()
         for name in ['mask', 'rand', 'keep']:
-            self.count_metric[name] = Count()
+            self.count_metric[name] = Counter()
             self.acc_metric[name] = pl.metrics.classification.Accuracy()
 
     def configure_optimizers(self):
@@ -287,20 +256,6 @@ class Pretrain(SeqBERTLightningModule):
                 self.log(name + '_p', precision, prog_bar=False)
                 self.log(name + '_r', recall, prog_bar=False)
 
-    def training_step(self, x, batch_idx):
-        batch, (seqname, coord) = x
-        loss, pred_loss, cls_loss, predicted, latent, source, target, mask, embedded = self.masked_forward(batch)
-        self.prev_loss = loss.item()
-        if batch_idx % self.hparams.print_progress_freq == 0:
-            self.print_progress(loss, predicted, latent, source, target, mask, embedded, seqname, coord)
-        self.log('m_loss', pred_loss.item(), prog_bar=True)
-        self.log('c_loss', cls_loss.item(), prog_bar=True)
-        self.accuracy_report(predicted, source, target, mask)
-        for name, coord in zip(seqname, coord):
-            self.log('chr', seqname_to_n(name))
-            self.log('coord', coord)
-        return loss
-
     def print_progress(self, loss, predicted, latent, source, target, mask, embedded, seqname, coord):
         str_train_sample = summarize(
             mask + len(self.model.tokens),
@@ -327,6 +282,18 @@ class Pretrain(SeqBERTLightningModule):
         print('embedding/latent len/pairwise dist', tensor_stats_str(
             embedded_vector_lengths, embedded_pairwise_dist, latent_vector_lengths, latent_pairwise_dist))
 
+    def training_step(self, x, batch_idx):
+        batch, (seqname, coord) = x
+        loss, pred_loss, cls_loss, predicted, latent, source, target, mask, embedded = self.masked_forward(batch)
+        self.prev_loss = loss.item()
+        if batch_idx % self.hparams.print_progress_freq == 0:
+            self.print_progress(loss, predicted, latent, source, target, mask, embedded, seqname, coord)
+        self.log('m_loss', pred_loss.item(), prog_bar=True)
+        self.log('c_loss', cls_loss.item(), prog_bar=True)
+        self.accuracy_report(predicted, source, target, mask)
+        self.log_chr_coord(seqname, coord)
+        return loss
+
     def validation_step(self, batch, batch_idx):
         x, (seqname, coord) = batch
         loss, pred_loss, cls_loss, predicted, latent, source, target, mask, embedded = self.masked_forward(x)
@@ -335,9 +302,7 @@ class Pretrain(SeqBERTLightningModule):
         self.log('val_m_loss', pred_loss.item())
         self.log('val_c_loss', cls_loss.item())
         self.accuracy_report(predicted, source, target, mask, compute=False, is_val=True)
-        for name, coord in zip(seqname, coord):
-            self.log('val_chr', seqname_to_n(name), prog_bar=True)
-            self.log('val_coord', coord, prog_bar=True)
+        self.log_chr_coord(seqname, coord, is_val=True)
         return loss
 
     def validation_epoch_end(self, val_step_outputs):
@@ -375,4 +340,4 @@ class Pretrain(SeqBERTLightningModule):
 
 
 if __name__ == '__main__':
-    main(Pretrain)
+    main(Pretrain, Pretrain)
