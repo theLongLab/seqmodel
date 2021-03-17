@@ -56,7 +56,7 @@ class SeqBERT(nn.Module):
         latent = self.transformer_encoder(embedded).permute(1, 2, 0)
         if self.classify_only:
             latent = latent[:, :, 0:1]  # take index 0 of seq as target
-        predicted = self.decoder(latent).squeeze() # remove seq dim (dim=2)
+        predicted = self.decoder(latent).squeeze(dim=2) # remove seq dim (dim=2)
         return predicted, latent, embedded
 
 

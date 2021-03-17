@@ -19,10 +19,10 @@ from exp.seqbert.pretrain import Pretrain
 
 class MatFileDataset(IterableDataset):
 
-    def __init__(self, sampler, batch_size):
+    def __init__(self, sampler, batch_size, target_indexes=None):
         self.sampler = sampler
         self.batch_size = batch_size
-        self.cls_token = TOKENS_BP_IDX['~']
+        self.target_indexes = target_indexes
 
     def __iter__(self):
         for _ in range(self.sampler.n_samples):
@@ -32,7 +32,9 @@ class MatFileDataset(IterableDataset):
             seq = torch.tensor(seq, dtype=torch.long).permute(0, 2, 1)
             seq = one_hot_to_index(seq)  # embedding works on indices
             target = torch.tensor(target, dtype=torch.float)
-            cls_tokens = torch.zeros([seq.shape[0], 1], dtype=torch.long) + self.cls_token
+            if self.target_indexes is not None:
+                target = target[:,self.target_indexes]
+            cls_tokens = torch.zeros([seq.shape[0], 1], dtype=torch.long) + TOKENS_BP_IDX['~']
             seq = torch.cat([cls_tokens, seq], dim=1)
             yield seq, target  # (batch, seq, channel) and (batch, channel)
 
@@ -41,7 +43,12 @@ class FineTuneDeepSEA(SeqBERTLightningModule):
 
     def __init__(self, **hparams):
         super().__init__(**hparams)
-        self.model = SeqBERT(classify_only=True, n_class=919, **hparams)
+        self.target = None
+        n_class = 919
+        if self.hparams.single_target is not None:
+            self.target = [self.hparams.single_target]
+            n_class = 1
+        self.model = SeqBERT(classify_only=True, n_class=n_class, **hparams)
         self.loss_fn = nn.BCEWithLogitsLoss()
 
         self.train_acc = pl.metrics.Accuracy(threshold=0)
@@ -58,17 +65,17 @@ class FineTuneDeepSEA(SeqBERTLightningModule):
     def train_dataloader(self):
         train_data = MatFileSampler(self.hparams.train_mat, 'trainxdata', 'traindata',
             sequence_batch_axis=2, sequence_alphabet_axis=1, targets_batch_axis=1)
-        return MatFileDataset(train_data, self.hparams.batch_size)
+        return MatFileDataset(train_data, self.hparams.batch_size, target_indexes=self.target)
 
     def val_dataloader(self):
         valid_data = MatFileSampler(self.hparams.valid_mat, 'validxdata', 'validdata',
             sequence_batch_axis=0, sequence_alphabet_axis=1, targets_batch_axis=0, shuffle=False)
-        return MatFileDataset(valid_data, self.hparams.batch_size)
+        return MatFileDataset(valid_data, self.hparams.batch_size, target_indexes=self.target)
 
     def test_dataloader(self):
         test_data = MatFileSampler(self.hparams.test_mat, 'testxdata', 'testdata',
             sequence_batch_axis=0, sequence_alphabet_axis=1, targets_batch_axis=0, shuffle=False)
-        return MatFileDataset(test_data, self.hparams.batch_size)
+        return MatFileDataset(test_data, self.hparams.batch_size, target_indexes=self.target)
 
     def training_step(self, batch, batch_idx):
         x, target = batch
@@ -84,6 +91,7 @@ class FineTuneDeepSEA(SeqBERTLightningModule):
     def validation_step(self, batch, batch_idx):
         x, target = batch
         predicted, latent, embedded = self.model.forward(x)
+        print(x.shape, predicted.shape, target.shape)
         loss = self.loss_fn(predicted, target)
         self.val_pr_curve(predicted.flatten(), target.flatten())
         self.val_roc_curve(predicted.flatten(), target.flatten())
@@ -121,6 +129,7 @@ class FineTuneDeepSEA(SeqBERTLightningModule):
         parser.add_argument('--train_mat', default='data/deepsea/train.mat', type=str)
         parser.add_argument('--valid_mat', default='data/deepsea/valid.mat', type=str)
         parser.add_argument('--test_mat', default='data/deepsea/test.mat', type=str)
+        parser.add_argument('--single_target', default=None, type=int)
         return parser
 
 
