@@ -32,7 +32,6 @@ class MatFileDataset(IterableDataset):
                 target = torch.tensor(target, dtype=torch.float)
                 if self.target_indexes is not None:
                     target = target[:,self.target_indexes]
-                    print('positives', target)
                     if torch.sum(target) != 0:  # no positives
                         break
             # swap dimensions from (batch, seq, channel) to the usual (batch, channel, seq)
