@@ -26,14 +26,18 @@ class MatFileDataset(IterableDataset):
 
     def __iter__(self):
         for _ in range(self.sampler.n_samples):
-            batch, _ = self.sampler.get_data_and_targets(self.batch_size, n_samples=self.batch_size)
-            seq, target = batch[0]
+            while True:
+                batch, _ = self.sampler.get_data_and_targets(self.batch_size, n_samples=self.batch_size)
+                seq, target = batch[0]
+                target = torch.tensor(target, dtype=torch.float)
+                if self.target_indexes is not None:
+                    target = target[:,self.target_indexes]
+                    print('positives', target)
+                    if torch.sum(target) != 0:  # no positives
+                        break
             # swap dimensions from (batch, seq, channel) to the usual (batch, channel, seq)
             seq = torch.tensor(seq, dtype=torch.long).permute(0, 2, 1)
             seq = one_hot_to_index(seq)  # embedding works on indices
-            target = torch.tensor(target, dtype=torch.float)
-            if self.target_indexes is not None:
-                target = target[:,self.target_indexes]
             cls_tokens = torch.zeros([seq.shape[0], 1], dtype=torch.long) + TOKENS_BP_IDX['~']
             seq = torch.cat([cls_tokens, seq], dim=1)
             yield seq, target  # (batch, seq, channel) and (batch, channel)
