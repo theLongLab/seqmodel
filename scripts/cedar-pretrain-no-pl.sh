@@ -66,10 +66,6 @@ python ./src/exp/seqbert/pretrain-no-pl.py \
     --valid_intervals=$RUN_DIR/data/ref_genome/grch38-1M-valid.bed \
     --default_root_dir=$OUT_DIR \
     --gradient_clip_val=0.5 \
-    --auto_lr_find=True \
-    --auto_scale_batch_size='binsearch' \
-    --kill_param_threshold=10000. \
-    --kill_grad_threshold=10000. \
     --dump_file=$OUT_DIR/model-dump.pt \
 
     # --load_checkpoint_path=$OUT_DIR/lightning_logs/version_55300997/checkpoints/N-Step-Checkpoint_0_170000.ckpt \

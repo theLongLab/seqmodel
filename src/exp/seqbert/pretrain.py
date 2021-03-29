@@ -23,7 +23,21 @@ from exp.seqbert.model import SeqBERT, SeqBERTLightningModule, Counter, \
 
 
 class PretrainBatchProcessor():
-
+        """Object to hold hyperparameters for forming batches for BERT pretraining,
+        from sequence data collected by a `torch.nn.DataLoader`.
+        The `collate` function is passed to `collate_fn` parameter in `torch.nn.DataLoader`.
+            seq_len: target length of output sequences
+            min_len: minimum source length after cropping
+            max_len: maximum source length after cropping
+            offset_min: minimum index of sequence midpoint when shifted for output
+            offset_max: maximum index of sequence midpoint when shifted for output
+            mask_prop: proportion of sequence positions (excluding CLS and SEP tokens)
+                to assign `exp.seqbert.pretrain.MASK_INDEX` (masked for prediction loss)
+            random_prop: proportion of sequence positions (excluding CLS and SEP tokens)
+                to assign `exp.seqbert.pretrain.RANDOM_INDEX` (randomized for prediction loss)
+            keep_prop: proportion of sequence positions (excluding CLS and SEP tokens)
+                to assign `exp.seqbert.pretrain.KEEP_INDEX` (unchanged but included in loss)
+        """
     def __init__(self, seq_len,
                 min_len, max_len,
                 offset_min, offset_max,
@@ -35,6 +49,17 @@ class PretrainBatchProcessor():
         self.offset_max = offset_max
         self.mask_props = (mask_prop, random_prop, keep_prop)
 
+        """Split batch into two equal sets, shuffle the second half of
+        one set of sequences for the NSP (next sequence prediction) pretraining task.
+        Sequences are split exactly in the middle.
+            batch: index tensor of dimensions (batch, sequence)
+            returns: `(classification target, shuffled sequnce tensors)`
+                Targets are true/false (whether each sequence is contiguous or shuffled)
+                translated to tokens (as defined in `exp.seqbert.TOKENS_BP_IDX`.
+                Shuffled sequence tensors are same dimensions as `batch`, except
+                a SEP token `TOKENS_BP_IDX['/']`has been added between the first and
+                last halves of all sequences so that dimensions are (batch, sequence + 1).
+        """
     def split_shuffle(self, batch):
         with torch.no_grad():
             # split into first and last subsequences, permute half of 'last' subsequences
@@ -47,6 +72,17 @@ class PretrainBatchProcessor():
             sep = torch.ones([batch.size(0), 1], dtype=batch.dtype) * TOKENS_BP_IDX['/']
             return cls_target, torch.cat([first, sep, last], dim=1)
 
+        """Randomly crops and shifts source sequence (which is longer than needed)
+        to match target length. NONE tokens are used, i.e. `TOKENS_BP_IDX['n']`,
+        as padding to fill subsequence to target length.
+            split_seqs: output sequences from split_shuffle, where the SEP token is 
+                exactly at the midpoint of every sequence.
+            returns: `(cropped sequences, indexes of SEP token)`
+                Cropped sequences are shifted so that their midpoint is between
+                `offset_min` and `offset_max`, and cropped to dimensions (batch, `seq_len`).
+                Indexes give the position of the SEP token for each sequence in the batch,
+                and are of dimension (batch).
+        """
     def rand_subseq(self, split_seqs):  # index relative to source midpoint
         batch_size = split_seqs.size(0)
         src_midpoint = split_seqs.size(1) // 2  # assume SEP token at midpoint
@@ -67,6 +103,18 @@ class PretrainBatchProcessor():
             target[i, tgt_start:tgt_end] = seq[src_start:src_end]
         return target, sep_offsets
 
+        """Randomly generates masked positions according to `mask_prop`, `random_prop`, `keep_prop`.
+        Applies mask to target sequence to generate source (training) sequence,
+        replacing `MASK_INDEX` positions with `TOKENS_BP_IDX['m']` and `RANDOM_INDEX`
+        with random different bases (i.e. `A` cannot map to `A`).
+        Also replace classification label with CLS token at first position
+            target: the sequence to calculate loss against
+            returns: (source or training sequence, mask). Source sequence is the training input
+                of same dimensions as target.
+                Mask is an index tensor of same dimensions recording which positions were modified,
+                in order to allow loss to be calculated only on the relevant positions
+                (those that are not `NO_LOSS_INDEX`).
+        """
     def mask_transform(self, target):
         with torch.no_grad():
             # randomize, mask, or mark for loss calculation some proportion of positions
@@ -83,6 +131,16 @@ class PretrainBatchProcessor():
             # return mask of all positions that will contribute to loss
             return source, mask
 
+        """Combines the above functions to generate batches for BERT pretraining.
+            samples: list of objects or tuples from iterating over a `torch.utils.data.Dataset`,
+                Length is batch size.
+            returns: ((source, target, mask), (key, coord)). Tuple of training inputs and metadata.
+                Training inputs are source tensor for input to `model.forward()`, target tensor
+                for loss function, and mask for selecting loss positions from
+                output and target tensors.
+                Metadata is sequence key (i.e. name), which is an array of str of length (batch),
+                and start coord (i.e. index) which is an index tensor of dimension (batch).
+        """
     def collate(self, samples):
         sequences, metadata = zip(*samples)  # make each datatype a separate list
         key, coord = zip(*metadata)
