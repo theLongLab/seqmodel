@@ -18,6 +18,7 @@ def plot(prob, target, output_name, show_plots=False, plot_pr=False, plot_roc=Tr
     ax = fig.add_subplot(111)
     pr_auc, roc_auc = [], []
     for p, t in zip(prob, target):
+        print(p.shape, t.shape)
         if not torch.all(t == 0):
             if plot_pr:
                 precision, recall, _ = plmF.precision_recall_curve(p, t, pos_label=1)
@@ -61,18 +62,18 @@ def plot_progress(files, mean_over):
     plt.show()
 
 def main():
-    # filename = './test-scores.pt'
-    # scores = torch.load(filename)
-    # prob, target = scores_to_prob(scores)
-    # prob = prob.permute(1, 0)
-    # target = target.permute(1, 0)
-    # global_auc = plot(prob.flatten().unsqueeze(0),
-    #             target.flatten().unsqueeze(0), 'global-auc-plot.png')
-    # _, individual_roc = plot(prob, target, 'individual-auc-plot.png')
-    # print(min(individual_roc), global_auc, max(individual_roc))
+    filename = './outputs/test-scores.pt'
+    scores = torch.load(filename)
+    prob, target = scores_to_prob(scores)
+    prob = prob.permute(1, 0)
+    target = target.permute(1, 0)
+    global_auc = plot(prob.flatten().unsqueeze(0),
+                target.flatten().unsqueeze(0), 'global-auc-plot.png')
+    _, individual_roc = plot(prob, target, 'individual-auc-plot.png')
+    print(min(individual_roc), global_auc, max(individual_roc))
 
-    filenames = ['From scratch loss', 'Pretrained loss']
-    plot_progress(filenames, 20)
+    # filenames = ['From scratch loss', 'Pretrained loss']
+    # plot_progress(filenames, 20)
 
 if __name__ == '__main__':
     main()

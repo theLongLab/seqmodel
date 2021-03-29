@@ -85,7 +85,6 @@ class PretrainBatchProcessor():
 
     def collate(self, samples):
         sequences, metadata = zip(*samples)  # make each datatype a separate list
-        print(sequences, metadata)
         key, coord = zip(*metadata)
         # shuffle for next sequence prediction task
         cls_targets, split_seqs = self.split_shuffle(torch.stack(sequences, dim=0))
