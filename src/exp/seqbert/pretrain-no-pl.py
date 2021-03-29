@@ -11,9 +11,16 @@ from exp.seqbert.pretrain import Pretrain
 
 
 def move_to_device(x, args):
+    device = 'cpu'
     if args.gpus > 0:
-        x = [a.to('cuda') for a in x]
-    return x
+        device = 'cuda'
+    (source, target, mask), (key, coord) = x
+    source = source.to(device)
+    target = target.to(device)
+    mask = mask.to(device)
+    key = key
+    coord = coord.to(device)
+    return (source, target, mask), (key, coord)
 
 
 def validate(module, val_dl, args, n_batch=None):
