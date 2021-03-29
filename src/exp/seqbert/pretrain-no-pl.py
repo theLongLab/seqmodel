@@ -39,9 +39,11 @@ def validate(module, val_dl, args, n_batch=None):
 
 
 def train(module, args):
-    optimizer = torch.optim.Adam(module.parameters(), lr=args.lr)
+    optimizer = module.configure_optimizers()
     train_dl = module.train_dataloader()
     val_dl = module.val_dataloader()
+    if args.gpus > 0:
+        module.to('cuda')
 
     ckpt_path = os.path.join(args.default_root_dir, 'checkpoints')
     if not os.path.exists(ckpt_path):
